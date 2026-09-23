@@ -1,0 +1,39 @@
+{
+  "_comment": "รายชื่อวารสาร/สำนักพิมพ์ที่เข้าข่าย Hijacked Journal หรือ Beall's List ใช้บังคับกฎข้อ 7 ของประกาศ 2131/2566 - ปรับปรุงรายชื่อได้โดยไม่ต้องแก้โค้ด",
+  "updatedAt": "2025-01-15",
+  "source": "Beall's List of Potential Predatory Journals and Publishers, retractiondatabase, ประกาศเตือนของ สกอ./สป.อว.",
+  "publishers": [
+    "OMICS International",
+    "Scientific Research Publishing",
+    "Academic Journals Inc",
+    "Science Publishing Group",
+    "David Publishing Company",
+    "WASET",
+    "World Academy of Science Engineering and Technology",
+    "Bentham Open",
+    "Hindawi Special Issues",
+    "Global Journals Inc",
+    "IOSR Journals",
+    "International Journal of Advanced Research",
+    "Austin Publishing Group",
+    "Jacobs Publishers",
+    "Longdom Publishing",
+    "SciTechnol",
+    "Allied Academies"
+  ],
+  "issn": [
+    "2231-5152",
+    "2249-9954",
+    "2320-9186"
+  ],
+  "titles": [
+    "International Journal of Scientific and Research Publications",
+    "International Journal of Innovative Research in Science Engineering and Technology",
+    "Journal of Advanced Research in Dynamical and Control Systems",
+    "International Journal of Psychosocial Rehabilitation",
+    "Test Engineering and Management",
+    "Solid State Technology",
+    "Turkish Journal of Computer and Mathematics Education",
+    "Materials Today: Proceedings (predatory mirror)"
+  ]
+}

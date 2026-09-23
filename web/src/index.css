@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-feature-settings: 'liga' 1;
+  }
+  /* Thai text needs a little more line height to keep tone marks legible. */
+  body,
+  input,
+  button,
+  select,
+  textarea {
+    @apply font-sans leading-relaxed;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500 ring-offset-1;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-slate-700;
+  }
+  .hint {
+    @apply mt-1 text-xs text-slate-500;
+  }
+  .error-text {
+    @apply mt-1 text-xs text-rose-600;
+  }
+}
+
+/* Print the request detail page as a clean document. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

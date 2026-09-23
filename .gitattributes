@@ -1,0 +1,8 @@
+# Shell scripts and nginx templates run inside Linux containers: a CRLF checkout
+# on Windows would break them ("set: Illegal option -").
+*.sh        text eol=lf
+*.template  text eol=lf
+Dockerfile  text eol=lf
+*.yml       text eol=lf
+
+*.ttf       binary

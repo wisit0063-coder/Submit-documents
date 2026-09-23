@@ -1,0 +1,147 @@
+# Full stack for the CPRU publishing-fee system.
+#
+#   docker compose up -d --build
+#   open http://localhost:8080      login: admin / Cpru@2569
+#
+# Every variable has a TEST default, so the stack starts without a .env file and
+# loads demo data (roles, faculties, journal tiers, budget year 2569, 9 demo
+# accounts). These defaults are public: before a real deployment, copy
+# .env.example to .env and replace every value marked "test".
+#
+# Development with hot reload layers docker-compose.dev.yml on top of this file.
+#
+#   browser ──> web (nginx :8080) ──/api──> api (node :3000) ──> db (postgres :5432)
+#                                                ^
+#                                     cron ──────┘  POST /api/cron/reminders once a day
+#
+# Only "web" publishes a port. The API and database stay on the internal network.
+
+name: ${COMPOSE_PROJECT_NAME:-cpru-pubfee}
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  PORT: "3000"
+  TZ: Asia/Bangkok
+  # Passwords go into a URL here: use letters and digits, or percent-encode.
+  # The password default must stay identical to POSTGRES_PASSWORD under "db".
+  #
+  # Point DATABASE_URL at Supabase to use the hosted database instead; the local
+  # "db" container then goes unused (see .env.example). Supabase also needs
+  # DIRECT_URL - its port-5432 string - because migrations cannot run through
+  # the pooler. On the local container both are the same server.
+  DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-cpru}:${POSTGRES_PASSWORD:-cpruTest2569}@db:5432/${POSTGRES_DB:-cpru_pubfee}}
+  DIRECT_URL: ${DIRECT_URL:-${DATABASE_URL:-postgresql://${POSTGRES_USER:-cpru}:${POSTGRES_PASSWORD:-cpruTest2569}@db:5432/${POSTGRES_DB:-cpru_pubfee}}}
+  APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+
+  JWT_SECRET: ${JWT_SECRET:-test-jwt-secret-local-docker-only}
+  JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+  COOKIE_NAME: ${COOKIE_NAME:-cpru_token}
+  # Must be "true" once the site is served over HTTPS. Left "false" for plain
+  # http://localhost, where a Secure cookie would never be sent and login fails.
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+
+  UPLOAD_DIR: /app/storage/uploads
+  MAX_UPLOAD_MB: "10"
+
+  MAIL_DRIVER: ${MAIL_DRIVER:-log}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_SECURE: ${SMTP_SECURE:-false}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  MAIL_FROM: ${MAIL_FROM:-no-reply@cpru.ac.th}
+
+  # The default must stay identical to CRON_TOKEN under "cron".
+  CRON_TOKEN: ${CRON_TOKEN:-test-cron-token-local-docker-only}
+  REMINDER_AFTER_BUSINESS_DAYS: ${REMINDER_AFTER_BUSINESS_DAYS:-5}
+
+  RUN_MIGRATIONS: "true"
+  # Demo data on by default. Idempotent: reference data is upserted and demo
+  # accounts are created only while the users table is empty.
+  RUN_SEED: ${RUN_SEED:-true}
+
+services:
+  db:
+    # Local stand-in for Supabase. Keep the major version in step with the
+    # Supabase project (Postgres 16) so migrations behave the same in both.
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cpru_pubfee}
+      POSTGRES_USER: ${POSTGRES_USER:-cpru}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cpruTest2569}
+      # Thai text: the database is created with UTF-8 and a locale-independent
+      # collation, so sorting does not depend on the host's locale files.
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
+      # The database clock stays UTC: all timestamps are stored in UTC and only
+      # converted to Bangkok time for display.
+      TZ: UTC
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # Succeeds only once the real server accepts connections, not during init.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cpru} -d ${POSTGRES_DB:-cpru_pubfee}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  api:
+    build:
+      context: ./api
+      target: runtime
+      args:
+        FETCH_FONTS: ${FETCH_FONTS:-true}
+    image: ${COMPOSE_PROJECT_NAME:-cpru-pubfee}-api:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: *api-environment
+    volumes:
+      # Attachments live outside the web root and survive container rebuilds.
+      - uploads:/app/storage/uploads
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  web:
+    build:
+      context: ./web
+      target: runtime
+    image: ${COMPOSE_PROJECT_NAME:-cpru-pubfee}-web:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_UPSTREAM: api:3000
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+
+  cron:
+    build:
+      context: ./docker/cron
+    image: ${COMPOSE_PROJECT_NAME:-cpru-pubfee}-cron:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      CRON_TOKEN: ${CRON_TOKEN:-test-cron-token-local-docker-only}
+      REMINDER_URL: http://api:3000/api/cron/reminders
+      # Bangkok time. Default: every day at 08:00.
+      REMINDER_SCHEDULE: ${REMINDER_SCHEDULE:-0 8 * * *}
+
+volumes:
+  db-data:
+  uploads:

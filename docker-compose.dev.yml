@@ -1,0 +1,61 @@
+# Development override: hot reload for both apps, database reachable from host tools.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+#   web (Vite)  http://localhost:5173
+#   api         http://localhost:3000/api/health
+#   postgres    localhost:5432
+#
+# Dependencies are installed inside the images and kept in anonymous volumes,
+# so the Windows node_modules folder is never used by Linux containers. After
+# changing package.json, rebuild and refresh those volumes:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build --renew-anon-volumes
+
+services:
+  db:
+    ports:
+      - "${DB_PORT:-5432}:5432"
+
+  api:
+    build:
+      target: dev
+    image: ${COMPOSE_PROJECT_NAME:-cpru-pubfee}-api:dev
+    environment:
+      NODE_ENV: development
+      COOKIE_SECURE: "false"
+      MAIL_DRIVER: log
+      RUN_SEED: ${RUN_SEED:-true}
+    volumes:
+      - ./api:/app
+      - /app/node_modules
+      - uploads:/app/storage/uploads
+    ports:
+      - "${API_PORT:-3000}:3000"
+    healthcheck:
+      # First start also generates the client and runs migrations.
+      start_period: 120s
+
+  web:
+    build:
+      target: dev
+    image: ${COMPOSE_PROJECT_NAME:-cpru-pubfee}-web:dev
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      VITE_HOST: 0.0.0.0
+      VITE_API_PROXY_TARGET: http://api:3000
+      VITE_USE_POLLING: "true"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    ports: !override
+      - "${WEB_DEV_PORT:-5173}:5173"
+    healthcheck:
+      disable: true
+
+  # Reminders are off in development; start them explicitly with
+  #   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile cron up
+  cron:
+    profiles: ["cron"]
