@@ -21,10 +21,14 @@ datasource db {
 // 1. FACULTIES - คณะ / หน่วยงาน
 // ---------------------------------------------------------------
 model Faculty {
-  id        BigInt   @id @default(autoincrement())
-  code      String   @unique @db.VarChar(20)
-  nameTh    String   @map("name_th") @db.VarChar(255)
-  nameEn    String?  @map("name_en") @db.VarChar(255)
+  id       BigInt @id @default(autoincrement())
+  code     String @unique @db.VarChar(20)
+  nameTh   String @map("name_th") @db.VarChar(255)
+  nameEn   String? @map("name_en") @db.VarChar(255)
+  /// Order the unit appears in every dropdown and report. Set by the owner, not
+  /// alphabetical: sorting by name or code put the offices above the faculties
+  /// in an order nobody asked for. Ties fall back to code.
+  sortOrder Int      @default(100) @map("sort_order")
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -209,6 +213,12 @@ model Request {
   userId       BigInt @map("user_id")
   facultyId    BigInt @map("faculty_id") // snapshot ตอนยื่น
   departmentId BigInt @map("department_id")
+  /// Subject area as the requester's own profile spells it, snapshotted when
+  /// the request is filed. The form stopped asking for it (sign-up already
+  /// collects it) and `departments` still holds only the placeholder row per
+  /// unit until Q5 lands - without this the memo would print that placeholder
+  /// instead of what the person actually wrote.
+  departmentName String? @map("department_name") @db.VarChar(255)
 
   // ข้อมูลบทความ
   articleTitle String   @map("article_title") @db.Text
@@ -228,8 +238,16 @@ model Request {
   amountApproved  Decimal? @map("amount_approved") @db.Decimal(12, 2)
 
   // การนับสิทธิ์ตามประกาศ (ไม่เกิน 3 เรื่องต่อปีปฏิทิน)
-  calendarYear   Int  @map("calendar_year")
-  sequenceInYear Int? @map("sequence_in_year")
+  //
+  // calendarYear   = ปีปฏิทินที่บทความ "ตีพิมพ์" (มาจาก published_at) ใช้ในรายงาน
+  // entitlementYear = ปีปฏิทินที่ "ยื่น" ซึ่งเป็นปีที่ถูกหักสิทธิ์จริง เขียนตอนกดยื่น
+  //                   เป็น NULL ตอนเป็นฉบับร่าง เพราะยังไม่ได้ยื่นจึงยังไม่กินสิทธิ์ใคร
+  //
+  // สองค่านี้ต่างกันเฉพาะในช่วงผ่อนผันเดือนมกราคม (isWithinClaimWindow ใน workflow.ts)
+  // ห้ามรวมเป็นค่าเดียว บทความที่ตีพิมพ์ ธ.ค. แล้วยื่น ม.ค. กินสิทธิ์ของปีที่ยื่น
+  calendarYear    Int  @map("calendar_year")
+  entitlementYear Int? @map("entitlement_year")
+  sequenceInYear  Int? @map("sequence_in_year")
 
   budgetYearId    BigInt @map("budget_year_id")
   qaIndicatorYear Int?   @map("qa_indicator_year")
@@ -258,6 +276,7 @@ model Request {
   payment     Payment?
 
   @@index([userId, calendarYear])
+  @@index([userId, entitlementYear])
   @@index([status])
   @@index([doi])
   @@index([budgetYearId])

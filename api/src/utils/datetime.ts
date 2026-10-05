@@ -16,6 +16,11 @@ export function calendarYearOf(date: Date): number {
   return new Date(date.getTime() + BANGKOK_OFFSET_MS).getUTCFullYear();
 }
 
+/** Calendar month (1-12) of a date as seen in Bangkok. */
+export function calendarMonthOf(date: Date): number {
+  return new Date(date.getTime() + BANGKOK_OFFSET_MS).getUTCMonth() + 1;
+}
+
 /** Thai fiscal year (ปีงบประมาณ พ.ศ.): 1 Oct - 30 Sep. */
 export function fiscalYearOf(date: Date): number {
   const local = new Date(date.getTime() + BANGKOK_OFFSET_MS);

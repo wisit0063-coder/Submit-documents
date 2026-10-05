@@ -6,6 +6,7 @@ import {
   EDITABLE_STATUSES,
   FIRST_STEP,
   IN_FLIGHT_STATUSES,
+  entitlementYearOf,
   stepByOrder,
 } from '../config/workflow';
 import { calendarYearOf, toDateOnly } from '../utils/datetime';
@@ -55,8 +56,21 @@ const requestInclude = {
 
 export type RequestDetail = Prisma.RequestGetPayload<{ include: typeof requestInclude }>;
 
-/** Running number per fiscal year: RQ-2569-0001. */
+/**
+ * Running number per fiscal year: RQ-2569-0001.
+ *
+ * Two people saving a draft at the same moment would otherwise read the same
+ * MAX and build the same number, and the unique index then fails the second one
+ * with a bare 409 that means nothing to the person clicking Save. The advisory
+ * lock serialises numbering per fiscal year and is released when the
+ * surrounding transaction ends, so it never outlives the insert.
+ */
 async function nextRequestNo(budgetYear: number, client: Tx): Promise<string> {
+  // $executeRaw, not $queryRaw: the function returns void and Prisma cannot
+  // deserialize that. 4471 is an arbitrary namespace so the pair cannot collide
+  // with a lock any other feature takes.
+  await client.$executeRaw`SELECT pg_advisory_xact_lock(4471, ${budgetYear}::int4)`;
+
   const prefix = `RQ-${budgetYear}-`;
   const latest = await client.request.findFirst({
     where: { requestNo: { startsWith: prefix } },
@@ -65,6 +79,34 @@ async function nextRequestNo(budgetYear: number, client: Tx): Promise<string> {
   });
   const lastSeq = latest ? Number.parseInt(latest.requestNo.slice(prefix.length), 10) : 0;
   return `${prefix}${String(lastSeq + 1).padStart(4, '0')}`;
+}
+
+/**
+ * Takes the row lock for a request inside a transaction and confirms it is
+ * still in the state the caller checked before opening it.
+ *
+ * Every workflow guard runs before the transaction starts, so two clicks landing
+ * together both passed it - proven against Supabase, where the round trip is
+ * long enough to make that easy: two simultaneous final-approves both returned
+ * 200, wrote two "APPROVED" rows in request_status_logs and burned two
+ * sequence numbers. Locking the row makes the second one wait, and by then the
+ * status has moved on, so it is refused instead.
+ */
+export async function lockRequest(
+  client: Tx,
+  requestId: bigint,
+  expected: RequestStatus,
+): Promise<void> {
+  const rows = await client.$queryRaw<{ status: RequestStatus }[]>`
+    SELECT status FROM requests WHERE id = ${requestId} FOR UPDATE
+  `;
+  const current = rows[0]?.status;
+  if (current !== expected) {
+    throw unprocessable(
+      'INVALID_STATE',
+      'คำขอนี้เพิ่งถูกดำเนินการไปแล้ว กรุณารีเฟรชหน้าจอแล้วตรวจสอบสถานะล่าสุด',
+    );
+  }
 }
 
 export async function writeStatusLog(
@@ -292,15 +334,34 @@ export async function createRequest(user: AuthUser, input: CreateRequestInput) {
     throw forbidden('เฉพาะผู้มีบทบาทผู้ขอรับค่าตอบแทนเท่านั้นที่สร้างคำขอได้');
   }
 
-  // A self-registered researcher may have no department yet (section 13.6): they
-  // pick one here, and requests.department_id is NOT NULL, so it is required.
-  const departmentId = input.departmentId ? BigInt(input.departmentId) : user.departmentId;
-  if (!departmentId) {
-    throw badRequest('DEPARTMENT_REQUIRED', 'กรุณาเลือกสาขาวิชาต้นสังกัดในแบบฟอร์ม');
-  }
+  // The form no longer asks for a department: the person already gave their
+  // unit and subject area when they signed up (section 13.2), and asking twice
+  // only offered the placeholder row anyway. requests.department_id is still
+  // NOT NULL, so resolve one - profile first, else the unit's own row.
+  // `departmentId` in the body is still honoured for older clients.
+  const askedFor = input.departmentId ? BigInt(input.departmentId) : user.departmentId;
+  let department = askedFor
+    ? await prisma.department.findUnique({ where: { id: askedFor } })
+    : null;
 
-  const department = await prisma.department.findUnique({ where: { id: departmentId } });
-  if (!department) throw badRequest('INVALID_DEPARTMENT', 'ไม่พบสาขาวิชาที่ระบุ');
+  if (!department) {
+    if (user.facultyId === null) {
+      throw badRequest(
+        'DEPARTMENT_REQUIRED',
+        'บัญชีนี้ยังไม่ได้ผูกหน่วยงาน/สังกัด กรุณาติดต่อผู้ดูแลระบบ',
+      );
+    }
+    department = await prisma.department.findFirst({
+      where: { facultyId: user.facultyId, isActive: true },
+      orderBy: { id: 'asc' },
+    });
+    if (!department) {
+      throw unprocessable(
+        'DEPARTMENT_REQUIRED',
+        'หน่วยงานของท่านยังไม่มีสาขาวิชาในระบบ กรุณาติดต่อผู้ดูแลระบบ',
+      );
+    }
+  }
 
   // The request snapshots the department's faculty, which must be the unit the
   // person actually belongs to.
@@ -316,6 +377,12 @@ export async function createRequest(user: AuthUser, input: CreateRequestInput) {
     throw unprocessable('NO_ACTIVE_BUDGET_YEAR', 'ยังไม่ได้ตั้งวงเงินปีงบประมาณปัจจุบัน');
   }
 
+  // AuthUser carries no free-text subject area; read it for the snapshot below.
+  const profile = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { departmentName: true },
+  });
+
   const { amount } = await resolveTierAmount(BigInt(input.journalTierId), input.fromConference);
   const publishedAt = toDateOnly(input.publishedAt);
 
@@ -329,6 +396,9 @@ export async function createRequest(user: AuthUser, input: CreateRequestInput) {
         // faculty that handled it.
         facultyId: department.facultyId,
         departmentId: department.id,
+        // What the person wrote at sign-up wins over the placeholder row name:
+        // it is the one the memo should print.
+        departmentName: profile?.departmentName?.trim() || department.nameTh,
         articleTitle: input.articleTitle,
         journalName: input.journalName,
         volume: input.volume || null,
@@ -403,12 +473,12 @@ export async function updateRequest(user: AuthUser, id: bigint, input: UpdateReq
 }
 
 export async function getMyQuota(user: AuthUser, calendarYear?: number) {
-  const year = calendarYear ?? calendarYearOf(new Date());
+  const year = calendarYear ?? entitlementYearOf(new Date());
   const quota = await getQuota(user.id, year);
   const requests = await prisma.request.findMany({
     where: {
       userId: user.id,
-      calendarYear: year,
+      entitlementYear: year,
       status: { in: [...IN_FLIGHT_STATUSES, RequestStatus.APPROVED, RequestStatus.PAID] },
     },
     select: {
@@ -460,12 +530,20 @@ export async function submitRequest(
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockRequest(tx, id, RequestStatus.DRAFT);
+
+    // The entitlement year is fixed here, at the moment of filing, because a
+    // December article filed in the January grace window spends a slot of the
+    // new year - see isWithinClaimWindow in config/workflow.ts.
+    const submittedAt = new Date();
+
     const request = await tx.request.update({
       where: { id },
       data: {
         status: FIRST_STEP.status,
         currentStep: FIRST_STEP.order,
-        submittedAt: new Date(),
+        submittedAt,
+        entitlementYear: entitlementYearOf(submittedAt),
       },
     });
 
@@ -536,9 +614,21 @@ export async function resubmitRequest(
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockRequest(tx, id, RequestStatus.RETURNED);
+
+    // Resubmitting after a return does NOT re-stamp the entitlement year: the
+    // claim belongs to the year it was first filed in, otherwise a request
+    // returned in December could be walked into the next year's quota on
+    // purpose. Only legacy rows with no year at all are filled in.
     const request = await tx.request.update({
       where: { id },
-      data: { status: targetStep.status, currentStep: targetStep.order },
+      data: {
+        status: targetStep.status,
+        currentStep: targetStep.order,
+        ...(existing.entitlementYear === null
+          ? { entitlementYear: entitlementYearOf(existing.submittedAt ?? new Date()) }
+          : {}),
+      },
     });
 
     await tx.requestApproval.upsert({
@@ -589,6 +679,8 @@ export async function cancelRequest(user: AuthUser, id: bigint, ipAddress: strin
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockRequest(tx, id, request.status);
+
     const result = await tx.request.update({
       where: { id },
       data: { status: RequestStatus.CANCELLED, closedAt: new Date() },

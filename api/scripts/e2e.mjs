@@ -19,20 +19,30 @@ const BASE = process.env.BASE ?? 'http://localhost:8080/api';
  * this only lets one script exercise more than an hour's worth of sign-ups.
  */
 async function resetRateLimits(why) {
+  const started = Date.now();
   execSync('docker restart cpru-pubfee-api-1', { stdio: 'ignore' });
-  for (let i = 0; i < 40; i += 1) {
+  // Five minutes, not twenty seconds. Booting runs "migrate deploy" and the
+  // seed before the port opens: ~5s against the local container, but measured
+  // at 67s against Supabase, where every statement crosses an ocean.
+  const deadline = started + 300_000;
+  let waited = 0;
+  while (Date.now() < deadline) {
     try {
       const r = await fetch(`${BASE}/health`);
       if (r.ok) {
-        console.log(`  · รีเซ็ตตัวนับ rate limit (${why})`);
+        const secs = Math.round((Date.now() - started) / 1000);
+        console.log(`  · รีเซ็ตตัวนับ rate limit (${why}) — api กลับมาใน ${secs} วินาที`);
         return;
       }
     } catch {
       /* still starting */
     }
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 1000));
+    waited += 1;
+    // Silence for minutes looks like a hang; say what is going on.
+    if (waited % 30 === 0) console.log(`      รอ api กลับมา ${waited} วินาที...`);
   }
-  throw new Error('api ไม่กลับมาหลังรีสตาร์ท');
+  throw new Error('api ไม่กลับมาภายใน 5 นาทีหลังรีสตาร์ท');
 }
 const RUN = process.env.RUN_ID ?? String(Date.now()).slice(-6);
 /**
@@ -69,6 +79,28 @@ function check(desc, expected, actual, detail) {
   return ok;
 }
 
+/**
+ * A run takes half an hour against a hosted database, and anything that
+ * recreates the nginx container in that window - `docker compose up -d` in
+ * another terminal, Docker Desktop restarting - kills the whole run mid-way.
+ *
+ * Only connection-level failures are retried: those mean nginx refused or
+ * dropped the connection before the API saw the request, so replaying it
+ * cannot double-apply a POST. A response that arrives, even a 502, is returned
+ * as-is and judged by the test.
+ */
+async function fetchResilient(url, options, attempts = 5) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      console.log(`      · เชื่อมต่อไม่ได้ (${error.cause?.code ?? error.message}) ลองใหม่ครั้งที่ ${attempt}`);
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+}
+
 // --- HTTP with a cookie jar per actor -------------------------------------
 
 class Actor {
@@ -88,7 +120,12 @@ class Actor {
       payload = JSON.stringify(body);
     }
 
-    const res = await fetch(`${BASE}${path}`, { method, headers, body: payload, redirect: 'manual' });
+    const res = await fetchResilient(`${BASE}${path}`, {
+      method,
+      headers,
+      body: payload,
+      redirect: 'manual',
+    });
     const setCookie = res.headers.getSetCookie?.() ?? [];
     for (const raw of setCookie) {
       const pair = raw.split(';')[0];

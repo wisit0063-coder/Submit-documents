@@ -3,7 +3,7 @@ import { env } from '../config/env';
 import { asyncHandler } from '../middleware/validate';
 import { serialize } from '../utils/serialize';
 import { unauthorized } from '../utils/errors';
-import { calendarYearOf } from '../utils/datetime';
+import { entitlementYearOf } from '../config/workflow';
 import * as authService from '../services/auth.service';
 import { getQuota } from '../services/validation.service';
 
@@ -23,7 +23,7 @@ export const logout = asyncHandler(async (_req: Request, res: Response) => {
 /** Current identity plus the remaining entitlement for this calendar year. */
 export const me = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw unauthorized();
-  const quota = await getQuota(req.user.id, calendarYearOf(new Date()));
+  const quota = await getQuota(req.user.id, entitlementYearOf(new Date()));
   res.json(serialize({ user: req.user, quota }));
 });
 

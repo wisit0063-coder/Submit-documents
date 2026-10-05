@@ -1,5 +1,7 @@
 import { ApprovalStepCode, RequestStatus } from '@prisma/client';
 
+import { calendarMonthOf, calendarYearOf } from '../utils/datetime';
+
 /**
  * Single source of truth for the approval chain, mirroring section 5 of CLAUDE.md:
  *
@@ -200,6 +202,47 @@ export const ROLE_LABELS_TH: Record<string, string> = {
 
 /** Maximum reimbursable articles per calendar year (ประกาศ 2131/2566 ข้อ 3). */
 export const MAX_ARTICLES_PER_CALENDAR_YEAR = 3;
+
+/**
+ * Rule 8 and its grace window (confirmed by the owner's mentor, 3 Oct 2026).
+ *
+ * An article is normally claimed in the calendar year it was published in. The
+ * quota is counted per calendar year rather than per fiscal year because that is
+ * how journals date their issues: the last issue of a year is dated December and
+ * the volume closes on 31 December.
+ *
+ * That same practice is what makes the deadline unfair at the edge - an article
+ * dated December leaves only days to file - so a December article may still be
+ * filed until 31 January of the following year. A claim filed in that window
+ * draws on the NEW year's three slots, not on the year of publication:
+ *
+ *   2 articles claimed in 2026, a third published 31 Dec 2026 and filed in
+ *   January 2027 -> that third one spends a 2027 slot, leaving 2 for 2027.
+ *
+ * Which is why the entitlement year is the year the claim is FILED in, never the
+ * year of publication. Those two differ only inside the grace window.
+ */
+const GRACE_PUBLISH_MONTH = 12;
+const GRACE_DEADLINE_MONTH = 1;
+
+/** The calendar year whose three slots a claim filed at `filedAt` draws on. */
+export function entitlementYearOf(filedAt: Date): number {
+  return calendarYearOf(filedAt);
+}
+
+/** Rule 8: may an article published at `publishedAt` be filed at `filedAt`? */
+export function isWithinClaimWindow(publishedAt: Date, filedAt: Date): boolean {
+  const publishedYear = calendarYearOf(publishedAt);
+  const filedYear = calendarYearOf(filedAt);
+
+  if (filedYear === publishedYear) return true;
+
+  return (
+    filedYear === publishedYear + 1 &&
+    calendarMonthOf(publishedAt) === GRACE_PUBLISH_MONTH &&
+    calendarMonthOf(filedAt) === GRACE_DEADLINE_MONTH
+  );
+}
 
 export const REQUIRED_DOC_TYPES = [
   'ACCEPTANCE_LETTER',

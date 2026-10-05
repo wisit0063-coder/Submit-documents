@@ -22,12 +22,13 @@ const ROLES = [
 
 const FACULTIES = [
   // The six units of the sign-up form, CLAUDE.md section 13.2.
-  { code: 'LAS', nameTh: 'คณะศิลปศาสตร์และวิทยาศาสตร์', nameEn: 'Faculty of Liberal Arts and Science' },
-  { code: 'EDU', nameTh: 'คณะครุศาสตร์และการพัฒนามนุษย์', nameEn: 'Faculty of Education and Human Development' },
-  { code: 'NUR', nameTh: 'คณะพยาบาลศาสตร์', nameEn: 'Faculty of Nursing' },
-  { code: 'PRES', nameTh: 'สำนักงานอธิการบดี', nameEn: 'Office of the President' },
-  { code: 'ACAD', nameTh: 'สำนักส่งเสริมวิชาการและการเรียนรู้ตลอดชีวิต', nameEn: 'Office of Academic Promotion and Lifelong Learning' },
-  { code: 'INTERNAL', nameTh: 'หน่วยงานภายใน', nameEn: 'Internal Units' },
+  // sortOrder is the order the owner asked for in the dropdown, offices first.
+  { code: 'ACAD', sortOrder: 1, nameTh: 'สำนักส่งเสริมวิชาการและการเรียนรู้ตลอดชีวิต', nameEn: 'Office of Academic Promotion and Lifelong Learning' },
+  { code: 'PRES', sortOrder: 2, nameTh: 'สำนักงานอธิการบดี', nameEn: 'Office of the President' },
+  { code: 'INTERNAL', sortOrder: 3, nameTh: 'หน่วยตรวจสอบภายใน', nameEn: 'Internal Audit Unit' },
+  { code: 'LAS', sortOrder: 4, nameTh: 'คณะศิลปศาสตร์และวิทยาศาสตร์', nameEn: 'Faculty of Liberal Arts and Science' },
+  { code: 'EDU', sortOrder: 5, nameTh: 'คณะครุศาสตร์และการพัฒนามนุษย์', nameEn: 'Faculty of Education and Human Development' },
+  { code: 'NUR', sortOrder: 6, nameTh: 'คณะพยาบาลศาสตร์', nameEn: 'Faculty of Nursing' },
 ];
 
 /**

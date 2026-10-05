@@ -8,6 +8,8 @@ import {
   IN_FLIGHT_STATUSES,
   MAX_ARTICLES_PER_CALENDAR_YEAR,
   REQUIRED_DOC_TYPES,
+  entitlementYearOf,
+  isWithinClaimWindow,
 } from '../config/workflow';
 import { calendarYearOf } from '../utils/datetime';
 
@@ -40,19 +42,27 @@ export function isBlacklistedJournal(journalName: string, issn?: string | null):
  * not), but requests still moving through review are counted as pending so a
  * researcher cannot queue up four at once and overshoot.
  */
-export async function getQuota(userId: bigint, calendarYear: number, client: Tx = prisma) {
+/**
+ * Slots used and still in flight for one person in one entitlement year.
+ *
+ * Counted on entitlement_year - the year the claim was FILED in - not on
+ * calendar_year, which records when the article was published. The two differ
+ * for an article published in December and filed inside the January grace
+ * window: that claim spends a slot of the new year (see isWithinClaimWindow).
+ */
+export async function getQuota(userId: bigint, entitlementYear: number, client: Tx = prisma) {
   const [used, pending] = await Promise.all([
     client.request.count({
-      where: { userId, calendarYear, status: { in: ENTITLEMENT_STATUSES } },
+      where: { userId, entitlementYear, status: { in: ENTITLEMENT_STATUSES } },
     }),
     client.request.count({
-      where: { userId, calendarYear, status: { in: IN_FLIGHT_STATUSES } },
+      where: { userId, entitlementYear, status: { in: IN_FLIGHT_STATUSES } },
     }),
   ]);
 
   const limit = MAX_ARTICLES_PER_CALENDAR_YEAR;
   return {
-    calendarYear,
+    calendarYear: entitlementYear,
     limit,
     used,
     pending,
@@ -147,22 +157,29 @@ export async function validateForSubmit(
   // column is itself derived from publishedAt (request.service.ts), so the two
   // were equal by construction and the rule never fired - a 2024 article could
   // be claimed in 2026. The year that matters is the one on the clock now.
-  const claimYear = calendarYearOf(new Date());
-  if (calendarYearOf(request.publishedAt) !== claimYear) {
+  //
+  // A December article may still be filed until 31 January of the following
+  // year, and that late claim spends a slot of the NEW year - which is why the
+  // quota below is counted on claimYear and not on request.calendarYear.
+  const filedAt = new Date();
+  const claimYear = entitlementYearOf(filedAt);
+  if (!isWithinClaimWindow(request.publishedAt, filedAt)) {
+    const publishedYear = calendarYearOf(request.publishedAt);
     issues.push({
       code: 'PUBLISH_YEAR_MISMATCH',
       message:
         `บทความต้องตีพิมพ์ในปีปฏิทินเดียวกับปีที่ยื่นขอ (${claimYear}) ` +
-        `แต่บทความนี้ตีพิมพ์ปี ${calendarYearOf(request.publishedAt)}`,
+        `แต่บทความนี้ตีพิมพ์ปี ${publishedYear} ` +
+        'ยกเว้นบทความที่ตีพิมพ์เดือนธันวาคม ซึ่งยื่นได้ถึง 31 มกราคมของปีถัดไป',
     });
   }
 
-  // Rule 3 - yearly entitlement.
-  const quota = await getQuota(request.userId, request.calendarYear, client);
+  // Rule 3 - yearly entitlement, against the year this claim is being filed in.
+  const quota = await getQuota(request.userId, claimYear, client);
   const otherPending = await client.request.count({
     where: {
       userId: request.userId,
-      calendarYear: request.calendarYear,
+      entitlementYear: claimYear,
       status: { in: IN_FLIGHT_STATUSES },
       id: { not: request.id },
     },
@@ -170,7 +187,7 @@ export async function validateForSubmit(
   if (quota.used + otherPending >= MAX_ARTICLES_PER_CALENDAR_YEAR) {
     issues.push({
       code: 'QUOTA_EXCEEDED',
-      message: `ปี ${request.calendarYear} ใช้สิทธิ์ครบ ${MAX_ARTICLES_PER_CALENDAR_YEAR} เรื่องแล้ว`,
+      message: `ปี ${claimYear} ใช้สิทธิ์ครบ ${MAX_ARTICLES_PER_CALENDAR_YEAR} เรื่องแล้ว`,
     });
   }
 
