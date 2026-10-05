@@ -92,6 +92,15 @@ export const env = {
    * trusting hops the client controls.
    */
   trustProxyHops: toInt(process.env.TRUST_PROXY_HOPS, 1),
+  /**
+   * Interactive-transaction limits. Prisma defaults (2s wait, 5s run) assume a
+   * database on the same machine. Against a hosted one - Supabase in another
+   * country - final-approve does a dozen round trips inside one transaction and
+   * blew past 5s, which surfaced as "Transaction not found" and a failed
+   * approval. Raised, and tunable for a slower link.
+   */
+  dbTransactionMaxWaitMs: toInt(process.env.DB_TRANSACTION_MAX_WAIT_MS, 10_000),
+  dbTransactionTimeoutMs: toInt(process.env.DB_TRANSACTION_TIMEOUT_MS, 30_000),
   appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:5173',
 
   jwtSecret: secret('JWT_SECRET', 'dev-secret-do-not-use-in-production'),

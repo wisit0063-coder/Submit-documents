@@ -68,6 +68,9 @@ RUN npm ci --omit=dev \
 COPY app.js ./
 COPY --from=build /app/dist ./dist
 COPY --from=fonts /app/assets/fonts ./assets/fonts
+# Maintenance scripts run inside the container because that is where the
+# database credentials live - see e2e-cleanup.mjs.
+COPY scripts/e2e-cleanup.mjs ./scripts/e2e-cleanup.mjs
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # Strip CRLF in case the script was checked out on Windows, then create the
