@@ -1,1 +1,12 @@
+# Downloaded fonts stay out of the repository.
 *.ttf
+
+# TH SarabunPSK is the exception and IS committed. It is the face named in the
+# government typing rules (ระเบียบสำนักนายกรัฐมนตรีว่าด้วยงานสารบรรณ), and unlike
+# Google's Sarabun it has no stable download URL to fetch at build time, so the
+# only way to guarantee the memo prints correctly on every server is to ship it.
+# Its licence (DIP & SIPA) grants the right to "reproduce ... and distribute".
+!THSarabunPSK-Regular.ttf
+!THSarabunPSK-Bold.ttf
+!THSarabunPSK-Italic.ttf
+!THSarabunPSK-BoldItalic.ttf

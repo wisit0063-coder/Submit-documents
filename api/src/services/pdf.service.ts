@@ -9,18 +9,58 @@ import { STATUS_LABELS_TH } from '../config/workflow';
 import type { RequestDetail } from './request.service';
 
 /**
- * Sarabun is the Thai government standard face and is bundled with the project
- * rather than fetched at runtime: shared hosting has no fontconfig and no
- * network access from the app process.
+ * TH SarabunPSK - the face named in the government typing rules
+ * (ระเบียบสำนักนายกรัฐมนตรีว่าด้วยงานสารบรรณ) - is bundled with the project rather
+ * than fetched at runtime: shared hosting has no fontconfig and no network
+ * access from the app process.
  *
- * Place the four TTF files in api/assets/fonts/ before deploying - see README.
+ * Do not swap this back to Google's "Sarabun". The two share a name and a
+ * lineage but not their metrics, measured from the files themselves:
+ *
+ *   Google Sarabun   x-height 500/1000 em, cap height 700
+ *   TH SarabunPSK    x-height 340/1000 em, cap height 476
+ *
+ * Google's letters stand about 1.47x taller at the same point size, so the memo
+ * set in it at 14 pt looked like a 21 pt document to the people who read real
+ * ones - which is exactly what the owner's mentor reported (28 ก.ย. 2569). The
+ * sizes below are only correct for the government face.
+ *
+ * To move to TH Sarabun New instead (a later revision of the same design with
+ * better tone-mark placement), replace the four files and keep the names.
  */
 const FONT_FILE_NAMES = {
-  normal: 'Sarabun-Regular.ttf',
-  bold: 'Sarabun-Bold.ttf',
-  italics: 'Sarabun-Italic.ttf',
-  bolditalics: 'Sarabun-BoldItalic.ttf',
+  normal: 'THSarabunPSK-Regular.ttf',
+  bold: 'THSarabunPSK-Bold.ttf',
+  italics: 'THSarabunPSK-Italic.ttf',
+  bolditalics: 'THSarabunPSK-BoldItalic.ttf',
 } as const;
+
+/**
+ * Point sizes and margins from ระเบียบสำนักนายกรัฐมนตรีว่าด้วยงานสารบรรณ, ภาคผนวก 2
+ * (คำอธิบายการพิมพ์หนังสือราชการ). Keep them here rather than inline so the whole
+ * memo can be checked against the rule in one place.
+ */
+const SIZE = {
+  /** คำว่า "บันทึกข้อความ" */
+  title: 29,
+  /** ป้ายหัวเรื่อง: ส่วนราชการ / ที่ / วันที่ / เรื่อง */
+  headerLabel: 20,
+  /** เนื้อความ คำลงท้าย และลายมือชื่อ */
+  body: 16,
+  /** ตารางและหมายเหตุท้ายหน้า */
+  small: 14,
+} as const;
+
+/** 1 ซม. = 28.35 pt. ขอบซ้ายกว้างกว่าเพื่อเผื่อระยะเข้าแฟ้มเสนอลงนาม. */
+const CM = 28.3465;
+const MARGINS: [number, number, number, number] = [
+  Math.round(3.0 * CM), // ซ้าย
+  Math.round(2.5 * CM), // บน
+  Math.round(2.0 * CM), // ขวา
+  Math.round(2.0 * CM), // ล่าง
+];
+/** ย่อหน้าปกติเคาะ 2.5 ซม. ตามระเบียบ */
+const PARAGRAPH_INDENT = Math.round(2.5 * CM);
 
 /**
  * Where the fonts sit depends on how the app was started, and getting this wrong
@@ -68,13 +108,13 @@ function getPrinter(): PdfPrinter {
     throw new AppError(
       500,
       'FONT_NOT_INSTALLED',
-      'ยังไม่ได้ติดตั้งฟอนต์ Sarabun บนเซิร์ฟเวอร์ จึงออกเอกสาร PDF ไม่ได้ ' +
+      'ยังไม่ได้ติดตั้งฟอนต์ TH SarabunPSK บนเซิร์ฟเวอร์ จึงออกเอกสาร PDF ไม่ได้ ' +
         'กรุณาวางไฟล์ฟอนต์ไว้ที่ api/assets/fonts/ ตามคู่มือติดตั้ง',
       { missing: missing.map((file) => path.basename(file)) },
     );
   }
 
-  printer = new PdfPrinter({ Sarabun: fontFiles });
+  printer = new PdfPrinter({ THSarabun: fontFiles });
   return printer;
 }
 
@@ -88,6 +128,26 @@ function labelValue(label: string, value: string): Content {
       { text: value || '-', width: '*' },
     ],
     margin: [0, 1, 0, 1],
+  };
+}
+
+/**
+ * One line of the memo header. The label is the 20 pt bold of the printed form
+ * while the value stays at body size, so the value is nudged down to sit on the
+ * same baseline as the taller label rather than aligning at the top.
+ */
+function headerRow(label: string, value: string): Content {
+  return {
+    columns: [
+      { text: label, width: 'auto', fontSize: SIZE.headerLabel, bold: true },
+      {
+        text: value || '-',
+        width: '*',
+        fontSize: SIZE.body,
+        margin: [6, (SIZE.headerLabel - SIZE.body) * 0.8, 0, 0],
+      },
+    ],
+    margin: [0, 2, 0, 2],
   };
 }
 
@@ -140,29 +200,40 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
 
   const definition: TDocumentDefinitions = {
     pageSize: 'A4',
-    pageMargins: [70, 50, 50, 50],
-    defaultStyle: { font: 'Sarabun', fontSize: 14, lineHeight: 1.25 },
+    pageMargins: MARGINS,
+    defaultStyle: { font: 'THSarabun', fontSize: SIZE.body, lineHeight: 1 },
     info: {
       title: `${request.requestNo} - บันทึกข้อความขอรับค่าตอบแทนการตีพิมพ์`,
       author: 'มหาวิทยาลัยราชภัฏชัยภูมิ',
     },
     content: [
-      { text: 'บันทึกข้อความ', fontSize: 24, bold: true, alignment: 'center' },
+      { text: 'บันทึกข้อความ', fontSize: SIZE.title, bold: true, alignment: 'center' },
       {
         text: 'แบบฟอร์ม CPRU-RDI-F011',
-        fontSize: 11,
+        fontSize: SIZE.small,
         alignment: 'right',
-        margin: [0, -18, 0, 10],
+        margin: [0, -20, 0, 10],
       },
-      labelValue('ส่วนราชการ', `${request.faculty.nameTh} มหาวิทยาลัยราชภัฏชัยภูมิ`),
-      labelValue('ที่', request.requestNo),
-      labelValue('วันที่', formatThaiDate(request.submittedAt ?? request.createdAt)),
-      labelValue('เรื่อง', 'ขอรับค่าตอบแทนการตีพิมพ์บทความผลงานทางวิชาการ'),
-      { text: 'เรียน  อธิการบดีมหาวิทยาลัยราชภัฏชัยภูมิ', margin: [0, 8, 0, 8] },
+      // The header block follows the shape of the printed form: the unit on its
+      // own line, then the reference number and date sharing one, then subject.
+      headerRow('ส่วนราชการ', `${request.faculty.nameTh} มหาวิทยาลัยราชภัฏชัยภูมิ`),
       {
+        columns: [
+          headerRow('ที่', request.requestNo),
+          headerRow('วันที่', formatThaiDate(request.submittedAt ?? request.createdAt)),
+        ],
+        columnGap: 12,
+      },
+      headerRow('เรื่อง', 'ขอรับค่าตอบแทนการตีพิมพ์บทความผลงานทางวิชาการ'),
+      { text: 'เรียน  อธิการบดีมหาวิทยาลัยราชภัฏชัยภูมิ', margin: [0, 10, 0, 8] },
+      {
+        leadingIndent: PARAGRAPH_INDENT,
         text:
           `ข้าพเจ้า ${ownerName} ตำแหน่ง ${owner.academicPosition ?? '-'} ` +
-          `สังกัด ${owner.department?.nameTh ?? '-'} ${request.faculty.nameTh} ` +
+          // Snapshot first (CLAUDE.md ข้อ 8): the memo must keep naming the unit
+          // and subject area as they were when the request was filed, even if
+          // the person transfers afterwards.
+          `สังกัด ${request.departmentName ?? owner.department?.nameTh ?? '-'} ${request.faculty.nameTh} ` +
           'ขอรับค่าตอบแทนการตีพิมพ์บทความผลงานทางวิชาการ ตามประกาศมหาวิทยาลัยราชภัฏชัยภูมิ ' +
           'เลขที่ 2131/2566 โดยมีรายละเอียดดังนี้',
         margin: [0, 0, 0, 10],
@@ -233,7 +304,7 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
         text:
           'ระบบบันทึกผู้ลงนามและวันเวลาไว้ในฐานข้อมูล (ตาราง request_approvals) ' +
           'เอกสารฉบับนี้พิมพ์จากระบบเพื่อใช้ประกอบการเบิกจ่าย',
-        fontSize: 11,
+        fontSize: SIZE.small,
         italics: true,
         margin: [0, 0, 0, 8],
       },
@@ -260,14 +331,14 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
       columns: [
         {
           text: `พิมพ์จากระบบเมื่อ ${formatThaiDate(new Date())}`,
-          fontSize: 10,
-          margin: [50, 0, 0, 0],
+          fontSize: SIZE.small,
+          margin: [MARGINS[0], 0, 0, 0],
         },
         {
           text: `หน้า ${currentPage} / ${pageCount}`,
           alignment: 'right',
-          fontSize: 10,
-          margin: [0, 0, 50, 0],
+          fontSize: SIZE.small,
+          margin: [0, 0, MARGINS[2], 0],
         },
       ],
     }),

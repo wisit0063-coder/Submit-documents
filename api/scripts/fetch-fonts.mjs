@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 /**
- * Downloads the four Sarabun faces that pdfmake needs into assets/fonts/.
+ * Makes sure the four faces pdfmake needs are sitting in assets/fonts/.
  *
- * Files that already exist are left alone, so a locally supplied font always
- * wins over the download. Uses the built-in fetch (Node 18+), so it runs in a
- * slim container without curl.
+ * The memo is set in TH SarabunPSK, the face named in the government typing
+ * rules, and those files are committed to the repository: the national fonts
+ * have no stable URL to fetch from, and their licence (DIP & SIPA) grants the
+ * right to redistribute them. So in a normal checkout this script finds
+ * everything already in place and downloads nothing.
  *
- * Source: google/fonts repository, SIL Open Font License 1.1.
+ * The download path is kept for the fallback face only. If someone deletes the
+ * committed fonts, Google's Sarabun still gets the build to a working PDF -
+ * but the result is NOT the government face and reads about 1.47x larger at the
+ * same point size, so the sizes in pdf.service.ts will look wrong. Restore the
+ * real files rather than shipping that.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,7 +25,25 @@ const FACES = ['Regular', 'Bold', 'Italic', 'BoldItalic'];
 // A real TTF is hundreds of KB; anything tiny is an error page, not a font.
 const MIN_BYTES = 50_000;
 
+const present = (name) => {
+  const file = path.join(FONT_DIR, name);
+  return fs.existsSync(file) && fs.statSync(file).size >= MIN_BYTES;
+};
+
 fs.mkdirSync(FONT_DIR, { recursive: true });
+
+const government = FACES.map((face) => `THSarabunPSK-${face}.ttf`);
+const missingGovernment = government.filter((name) => !present(name));
+
+if (missingGovernment.length === 0) {
+  console.log('[fonts] TH SarabunPSK present - nothing to download');
+  process.exit(0);
+}
+
+console.warn(
+  `[fonts] TH SarabunPSK is missing (${missingGovernment.join(', ')}). ` +
+    'Falling back to Google Sarabun, which is NOT the government face.',
+);
 
 let failed = false;
 
@@ -27,7 +51,7 @@ for (const face of FACES) {
   const name = `Sarabun-${face}.ttf`;
   const target = path.join(FONT_DIR, name);
 
-  if (fs.existsSync(target) && fs.statSync(target).size >= MIN_BYTES) {
+  if (present(name)) {
     console.log(`[fonts] ${name} already present`);
     continue;
   }

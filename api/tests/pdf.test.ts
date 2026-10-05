@@ -9,7 +9,7 @@ import { AppError } from '../src/utils/errors';
 import type { RequestDetail } from '../src/services/request.service';
 
 const FONT_DIR = path.resolve(__dirname, '../assets/fonts');
-const fontsInstalled = ['Sarabun-Regular.ttf', 'Sarabun-Bold.ttf', 'Sarabun-Italic.ttf', 'Sarabun-BoldItalic.ttf']
+const fontsInstalled = ['THSarabunPSK-Regular.ttf', 'THSarabunPSK-Bold.ttf', 'THSarabunPSK-Italic.ttf', 'THSarabunPSK-BoldItalic.ttf']
   .every((file) => fs.existsSync(path.join(FONT_DIR, file)));
 
 const decimal = (value: number) => new Prisma.Decimal(value);
@@ -149,9 +149,9 @@ function fixture(): RequestDetail {
  * memo failed on every deployed build while this suite, which runs from source,
  * stayed green. The lookup now tries several layouts.
  */
-test('the Sarabun fonts are found wherever the app is started from', () => {
+test('the TH SarabunPSK fonts are found wherever the app is started from', () => {
   const dir = resolveFontDir();
-  const missing = ['Sarabun-Regular.ttf', 'Sarabun-Bold.ttf', 'Sarabun-Italic.ttf', 'Sarabun-BoldItalic.ttf']
+  const missing = ['THSarabunPSK-Regular.ttf', 'THSarabunPSK-Bold.ttf', 'THSarabunPSK-Italic.ttf', 'THSarabunPSK-BoldItalic.ttf']
     .filter((file) => !fs.existsSync(path.join(dir, file)));
   assert.deepEqual(missing, [], `ไม่พบฟอนต์ใน ${dir}`);
 });
@@ -161,7 +161,7 @@ test('the font lookup does not depend on the module being under src/', () => {
   // that candidate is tried first, so a dist/ build resolves to the same place.
   const fromCwd = path.resolve(process.cwd(), 'assets/fonts');
   assert.equal(
-    fs.existsSync(path.join(fromCwd, 'Sarabun-Regular.ttf')),
+    fs.existsSync(path.join(fromCwd, 'THSarabunPSK-Regular.ttf')),
     true,
     'assets/fonts ต้องอยู่ใต้ application root เพื่อให้ build ที่ deploy แล้วหาเจอ',
   );
@@ -181,7 +181,7 @@ test(
 
 test(
   'renders form CPRU-RDI-F011 as a valid PDF',
-  { skip: fontsInstalled ? false : 'Sarabun fonts not installed - see assets/fonts/README.md' },
+  { skip: fontsInstalled ? false : 'TH SarabunPSK fonts not installed - see assets/fonts/README.md' },
   async () => {
     const target = path.join(os.tmpdir(), `cpru-pdf-test-${Date.now()}.pdf`);
     const stream = buildRequestDocument(fixture());
