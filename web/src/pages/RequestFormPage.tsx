@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
 import { DOC_TYPE_LABELS, REQUIRED_DOC_TYPES, formatMoney, toDateInput } from '@/lib/format';
 import {
   Alert,
@@ -18,7 +17,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { AttachmentPanel } from '@/components/AttachmentPanel';
-import type { Department, JournalTier, RequestDetail } from '@/types';
+import type { JournalTier, RequestDetail } from '@/types';
 
 interface FormState {
   articleTitle: string;
@@ -32,7 +31,6 @@ interface FormState {
   publishedAt: string;
   journalTierId: string;
   fromConference: boolean;
-  departmentId: string;
   certNotOnStudyLeave: boolean;
   certNotThesisPart: boolean;
   certNotDuplicate: boolean;
@@ -50,7 +48,6 @@ const EMPTY_FORM: FormState = {
   publishedAt: '',
   journalTierId: '',
   fromConference: false,
-  departmentId: '',
   certNotOnStudyLeave: false,
   certNotThesisPart: false,
   certNotDuplicate: false,
@@ -61,7 +58,6 @@ export function RequestFormPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
   const isEdit = Boolean(id);
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -75,17 +71,6 @@ export function RequestFormPage() {
   } = useQuery({
     queryKey: ['journal-tiers'],
     queryFn: () => api.get<JournalTier[]>('/journal-tiers'),
-    staleTime: 30 * 60_000,
-  });
-
-  const {
-    data: departments,
-    isError: departmentsFailed,
-    refetch: refetchDepartments,
-  } = useQuery({
-    queryKey: ['departments', user?.facultyId],
-    queryFn: () => api.get<Department[]>(`/faculties/${user?.facultyId}/departments`),
-    enabled: Boolean(user?.facultyId),
     staleTime: 30 * 60_000,
   });
 
@@ -115,18 +100,11 @@ export function RequestFormPage() {
       publishedAt: toDateInput(existing.publishedAt),
       journalTierId: existing.journalTier.id,
       fromConference: existing.fromConference,
-      departmentId: existing.departmentId,
       certNotOnStudyLeave: existing.certNotOnStudyLeave,
       certNotThesisPart: existing.certNotThesisPart,
       certNotDuplicate: existing.certNotDuplicate,
     });
   }, [existing]);
-
-  useEffect(() => {
-    if (!isEdit && user?.departmentId) {
-      setForm((current) => ({ ...current, departmentId: user.departmentId as string }));
-    }
-  }, [isEdit, user?.departmentId]);
 
   /**
    * The amount is never typed in: it is read from journal_tiers so the form can
@@ -265,7 +243,7 @@ export function RequestFormPage() {
               <Field label="ฉบับที่ (Issue)" error={fieldErrors.issue}>
                 <Input value={form.issue} onChange={(e) => set('issue', e.target.value)} disabled={locked} />
               </Field>
-              <Field label="เลขหน้า/รหัส" error={fieldErrors.pages}>
+              <Field label="เลขหน้า/รหัสบทความ" error={fieldErrors.pages}>
                 <Input
                   value={form.pages}
                   onChange={(e) => set('pages', e.target.value)}
@@ -327,46 +305,11 @@ export function RequestFormPage() {
               </Field>
             </div>
 
-            {departmentsFailed && (
-              // The department is required to file, and this field used to just
-              // vanish when its list failed - leaving no way to supply it.
-              <Alert tone="error" title="โหลดรายการสาขาวิชาไม่สำเร็จ">
-                ต้องเลือกสาขาวิชาจึงจะบันทึกคำขอได้{' '}
-                <button
-                  type="button"
-                  className="font-medium underline"
-                  onClick={() => void refetchDepartments()}
-                >
-                  โหลดรายการใหม่
-                </button>
-              </Alert>
-            )}
-
-            {departments && departments.length > 0 && (
-              <Field
-                label="สาขาวิชาต้นสังกัด"
-                hint="ระบบจะบันทึกหน่วยงานและสาขาไว้เป็นข้อมูล ณ วันที่ยื่น"
-                // Sign-up leaves the department optional, but a request cannot
-                // be filed without one (requests.department_id is NOT NULL).
-                required
-                error={fieldErrors.departmentId}
-              >
-                <Select
-                  value={form.departmentId}
-                  onChange={(e) => set('departmentId', e.target.value)}
-                  disabled={locked}
-                  required
-                  invalid={Boolean(fieldErrors.departmentId)}
-                >
-                  <option value="">เลือกสาขาวิชา</option>
-                  {departments.map((department) => (
-                    <option key={department.id} value={department.id}>
-                      {department.nameTh}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            )}
+            {/*
+              No department field: the unit and subject area come from the
+              account (sign-up, section 13.2), and the server snapshots them
+              onto the request. Asking again only offered the placeholder row.
+            */}
           </div>
         </Card>
 

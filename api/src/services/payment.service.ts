@@ -2,7 +2,7 @@ import { Prisma, RequestStatus } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import type { AuthUser } from '../middleware/auth';
 import { notFound, unprocessable } from '../utils/errors';
-import { writeStatusLog } from './request.service';
+import { lockRequest, writeStatusLog } from './request.service';
 import { notifyStatusChange, notifyPlain } from '../notifications/dispatcher';
 
 /**
@@ -33,6 +33,8 @@ export async function recordPayment(
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockRequest(tx, request.id, RequestStatus.APPROVED);
+
     await tx.payment.create({
       data: {
         requestId: request.id,
@@ -104,6 +106,8 @@ export async function refundPayment(
   const isFullRefund = input.refundAmount >= Number(payment.amount);
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockRequest(tx, payment.requestId, payment.request.status);
+
     await tx.payment.update({
       where: { id: paymentId },
       data: {

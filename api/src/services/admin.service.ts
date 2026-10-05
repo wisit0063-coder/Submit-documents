@@ -10,7 +10,11 @@ import { notifyPlain } from '../notifications/dispatcher';
 // ---------------------------------------------------------------
 
 export function listFaculties() {
-  return prisma.faculty.findMany({ where: { isActive: true }, orderBy: { code: 'asc' } });
+  // Owner-defined order (schema: Faculty.sortOrder), not alphabetical.
+  return prisma.faculty.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+  });
 }
 
 export function listDepartments(facultyId: bigint) {
@@ -231,6 +235,40 @@ async function countOtherActiveAdmins(excludeUserId: bigint, client: Tx = prisma
   });
 }
 
+/**
+ * Refuses a username or email that another account already holds, comparing
+ * without regard to case.
+ *
+ * The unique indexes alone are not enough: PostgreSQL compares text
+ * case-sensitively, so "Somchai@cpru.ac.th" slips past an index that already
+ * holds "somchai@cpru.ac.th" (CLAUDE.md ข้อ 8). Two accounts would then share
+ * one address, and login - which matches case-insensitively - could no longer
+ * tell which one the person meant. Emails are stored lower-cased from here on,
+ * matching what the sign-up form does.
+ */
+async function assertIdentityFree(
+  identity: { username?: string; email?: string },
+  exceptId?: bigint,
+) {
+  const notSelf = exceptId ? { id: { not: exceptId } } : {};
+
+  if (identity.username) {
+    const taken = await prisma.user.findFirst({
+      where: { ...notSelf, username: { equals: identity.username, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (taken) throw unprocessable('USERNAME_TAKEN', 'ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว');
+  }
+
+  if (identity.email) {
+    const taken = await prisma.user.findFirst({
+      where: { ...notSelf, email: { equals: identity.email, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (taken) throw unprocessable('EMAIL_TAKEN', 'อีเมลนี้มีอยู่ในระบบแล้ว');
+  }
+}
+
 /** Temporary password is emailed to the account holder and must be changed on first login. */
 export async function createUser(input: {
   username: string;
@@ -246,6 +284,9 @@ export async function createUser(input: {
   phoneMobile?: string | null;
   roles: RoleAssignment[];
 }) {
+  const email = input.email.trim().toLowerCase();
+  await assertIdentityFree({ username: input.username, email });
+
   const roleLinks = await resolveRoleIds(input.roles);
   const unit = await resolveUserUnit(input.facultyId, input.departmentId);
   const tempPassword = crypto.randomBytes(6).toString('base64url');
@@ -254,7 +295,7 @@ export async function createUser(input: {
     const created = await tx.user.create({
       data: {
         username: input.username,
-        email: input.email,
+        email,
         passwordHash: await hashPassword(tempPassword),
         mustChangePassword: true,
         prefix: input.prefix ?? null,
@@ -348,6 +389,9 @@ export async function updateUser(
     }
   }
 
+  const email = input.email !== undefined ? input.email.trim().toLowerCase() : undefined;
+  await assertIdentityFree({ username: input.username, email }, id);
+
   const unitChanged = input.facultyId !== undefined || input.departmentId !== undefined;
   const unit = unitChanged
     ? await resolveUserUnit(
@@ -361,7 +405,7 @@ export async function updateUser(
       where: { id },
       data: {
         ...(input.username !== undefined ? { username: input.username } : {}),
-        ...(input.email !== undefined ? { email: input.email } : {}),
+        ...(email !== undefined ? { email } : {}),
         ...(input.prefix !== undefined ? { prefix: input.prefix } : {}),
         ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
         ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
@@ -426,7 +470,10 @@ export async function setUserStatus(id: bigint, isActive: boolean) {
  */
 export async function getReviewerCoverage() {
   const [faculties, scopedRoles] = await Promise.all([
-    prisma.faculty.findMany({ where: { isActive: true }, orderBy: { code: 'asc' } }),
+    prisma.faculty.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+    }),
     prisma.userRole.findMany({
       where: { role: { code: { in: ['FACULTY_QA', 'DEAN'] } }, user: { isActive: true } },
       select: { facultyId: true, role: { select: { code: true } } },

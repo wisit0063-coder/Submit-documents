@@ -38,7 +38,7 @@ export async function reportByFaculty(filter: ReportFilter) {
   const onlyFaculty = optionalId(filter.facultyId);
   const faculties = await prisma.faculty.findMany({
     where: { isActive: true, ...(onlyFaculty ? { id: onlyFaculty } : {}) },
-    orderBy: { code: 'asc' },
+    orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
   });
 
   const rows = await Promise.all(

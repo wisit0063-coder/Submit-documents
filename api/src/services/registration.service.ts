@@ -1,5 +1,5 @@
 import { Prisma, RegistrationStatus } from '@prisma/client';
-import { prisma } from '../config/prisma';
+import { prisma, type Tx } from '../config/prisma';
 import type { AuthUser } from '../middleware/auth';
 import { AppError, conflict, notFound, unprocessable } from '../utils/errors';
 import { hashPassword } from './auth.service';
@@ -131,6 +131,27 @@ async function loadPending(id: bigint) {
 }
 
 /**
+ * Takes the applicant's row lock inside a transaction and confirms the
+ * application is still waiting.
+ *
+ * `loadPending` runs before the transaction opens, so two admins clicking at the
+ * same time both pass it. Without this the applicant is emailed the decision
+ * twice, and an approve racing a reject leaves the account active while it is
+ * recorded as rejected. Same reasoning as `lockRequest` in request.service.ts.
+ */
+async function lockPending(client: Tx, id: bigint): Promise<void> {
+  const rows = await client.$queryRaw<{ registration_status: RegistrationStatus | null }[]>`
+    SELECT registration_status FROM users WHERE id = ${id} FOR UPDATE
+  `;
+  if (rows[0]?.registration_status !== RegistrationStatus.PENDING) {
+    throw unprocessable(
+      'REGISTRATION_NOT_PENDING',
+      'ใบสมัครนี้เพิ่งถูกพิจารณาไปแล้ว กรุณารีเฟรชหน้าจอแล้วตรวจสอบสถานะล่าสุด',
+    );
+  }
+}
+
+/**
  * Approves an application. RESEARCHER is always granted; the admin may add
  * higher positions in the same step (section 13.4). Faculty-scoped roles with
  * no scope default to the applicant's own unit, because an unscoped DEAN would
@@ -174,6 +195,8 @@ export async function approveRegistration(
   }
 
   await prisma.$transaction(async (tx) => {
+    await lockPending(tx, id);
+
     await tx.user.update({
       where: { id },
       data: {
@@ -208,15 +231,19 @@ export async function approveRegistration(
 export async function rejectRegistration(admin: AuthUser, id: bigint, reason: string) {
   const applicant = await loadPending(id);
 
-  await prisma.user.update({
-    where: { id },
-    data: {
-      isActive: false,
-      registrationStatus: RegistrationStatus.REJECTED,
-      registrationReviewedBy: admin.id,
-      registrationReviewedAt: new Date(),
-      registrationNote: reason,
-    },
+  await prisma.$transaction(async (tx) => {
+    await lockPending(tx, id);
+
+    await tx.user.update({
+      where: { id },
+      data: {
+        isActive: false,
+        registrationStatus: RegistrationStatus.REJECTED,
+        registrationReviewedBy: admin.id,
+        registrationReviewedAt: new Date(),
+        registrationNote: reason,
+      },
+    });
   });
 
   await notifyPlain(

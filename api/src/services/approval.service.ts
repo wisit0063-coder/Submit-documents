@@ -14,7 +14,7 @@ import { forbidden, notFound, unprocessable } from '../utils/errors';
 import { businessDaysBetween } from '../utils/datetime';
 import { assertBudgetAvailable } from './budget.service';
 import { findDuplicateArticle } from './validation.service';
-import { writeStatusLog } from './request.service';
+import { lockRequest, writeStatusLog } from './request.service';
 import { notifyStatusChange } from '../notifications/dispatcher';
 
 /**
@@ -123,6 +123,7 @@ export async function approveStep(
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockRequest(tx, requestId, request.status);
     await recordApproval(tx, {
       requestId,
       step,
@@ -195,6 +196,7 @@ export async function returnStep(
   if (!step.canReturn) throw forbidden('ขั้นตอนนี้ไม่สามารถตีกลับได้');
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockRequest(tx, requestId, request.status);
     await recordApproval(tx, {
       requestId,
       step,
@@ -245,6 +247,7 @@ export async function rejectRequest(
   const { request, step } = await assertCanActOnStep(user, requestId, ['APPROVER']);
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockRequest(tx, requestId, request.status);
     await recordApproval(tx, {
       requestId,
       step,
@@ -308,6 +311,7 @@ export async function finalApprove(
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockRequest(tx, requestId, request.status);
     // Re-read the balance inside the transaction: two approvers working at the
     // same time must not both spend the last of the budget.
     await assertBudgetAvailable(request.budgetYearId, input.amountApproved, tx);
@@ -316,17 +320,24 @@ export async function finalApprove(
     // moments another of this person's requests may have been approved, or the
     // same article approved on a different request - the submit gate cannot see
     // a future it has not happened yet.
+    // Counted on the entitlement year stamped at submission, not on the year
+    // the article was published: a December article filed in the January grace
+    // window draws on the new year's slots (config/workflow.ts). Legacy rows
+    // filed before the column existed fall back to the publication year, which
+    // was the same thing under the old rule.
+    const entitlementYear = request.entitlementYear ?? request.calendarYear;
+
     const alreadyUsed = await tx.request.count({
       where: {
         userId: request.userId,
-        calendarYear: request.calendarYear,
+        entitlementYear,
         status: { in: ENTITLEMENT_STATUSES },
       },
     });
     if (alreadyUsed >= MAX_ARTICLES_PER_CALENDAR_YEAR) {
       throw unprocessable(
         'QUOTA_EXCEEDED',
-        `ผู้ขอใช้สิทธิ์ปี ${request.calendarYear} ครบ ${MAX_ARTICLES_PER_CALENDAR_YEAR} เรื่องแล้ว ` +
+        `ผู้ขอใช้สิทธิ์ปี ${entitlementYear} ครบ ${MAX_ARTICLES_PER_CALENDAR_YEAR} เรื่องแล้ว ` +
           'จึงอนุมัติคำขอนี้เพิ่มไม่ได้',
       );
     }
@@ -356,7 +367,7 @@ export async function finalApprove(
     // even though it no longer consumes a slot, and counting would hand the same
     // number to the next approval.
     const highest = await tx.request.aggregate({
-      where: { userId: request.userId, calendarYear: request.calendarYear },
+      where: { userId: request.userId, entitlementYear },
       _max: { sequenceInYear: true },
     });
 
@@ -409,6 +420,7 @@ export async function sendToCommittee(
   const { request, step } = await assertCanActOnStep(user, requestId, ['RDI']);
 
   const updated = await prisma.$transaction(async (tx) => {
+    await lockRequest(tx, requestId, request.status);
     await recordApproval(tx, {
       requestId,
       step,
@@ -466,6 +478,15 @@ export async function setQaIndicatorYear(
 ) {
   const request = await prisma.request.findUnique({ where: { id: requestId } });
   if (!request) throw notFound('ไม่พบคำขอที่ระบุ');
+
+  // A draft is the owner's private working copy and no reviewer has seen it yet,
+  // so there is nothing to record an indicator year against.
+  if (request.status === RequestStatus.DRAFT) {
+    throw unprocessable(
+      'REQUEST_NOT_SUBMITTED',
+      'บันทึกปีตัวชี้วัดได้เฉพาะคำขอที่ยื่นแล้วเท่านั้น',
+    );
+  }
 
   // The route admits FACULTY_QA and ADMIN. ADMIN used to pass the route and then
   // be refused here on every request, because only FACULTY_QA scopes were read.
