@@ -53,7 +53,7 @@ const JOURNAL_TIERS = [
   { code: 'SCOPUS_Q3', nameTh: 'Scopus ควอไทล์ 3', databaseName: 'Scopus', quartile: 'Q3', rateNormal: 15000, rateConference: 8000, sortOrder: 3 },
   { code: 'SCOPUS_Q4', nameTh: 'Scopus ควอไทล์ 4', databaseName: 'Scopus', quartile: 'Q4', rateNormal: 10000, rateConference: 5000, sortOrder: 4 },
   { code: 'WOS_ISI', nameTh: 'Web of Science (ISI) หรือตามประกาศ ก.พ.อ.', databaseName: 'Web of Science', quartile: null, rateNormal: 10000, rateConference: 7000, sortOrder: 5 },
-  { code: 'ACI', nameTh: 'ACI (ฐานข้อมูลกลุ่มอาเซียน)', databaseName: 'ACI', quartile: null, rateNormal: 7000, rateConference: 5500, sortOrder: 6, isActive: false },
+  { code: 'ACI', nameTh: 'ACI (ฐานข้อมูลกลุ่มอาเซียน)', databaseName: 'ACI', quartile: null, rateNormal: 7000, rateConference: 5000, sortOrder: 6, isActive: false },
   { code: 'TCI_1', nameTh: 'TCI กลุ่มที่ 1', databaseName: 'TCI', quartile: null, rateNormal: 5000, rateConference: 3000, sortOrder: 7 },
   { code: 'TCI_2', nameTh: 'TCI กลุ่มที่ 2', databaseName: 'TCI', quartile: null, rateNormal: 3000, rateConference: 1500, sortOrder: 8 },
 ];

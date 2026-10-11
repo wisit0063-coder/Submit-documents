@@ -70,7 +70,7 @@ export const STATUS_LABELS: Record<RequestStatus, string> = {
   PENDING_APPROVAL: 'รออนุมัติ',
   APPROVED: 'อนุมัติแล้ว',
   REJECTED: 'ไม่อนุมัติ',
-  PAID: 'จ่ายแล้ว',
+  PAID: 'บันทึกการเบิกจ่ายแล้ว',
   CANCELLED: 'ยกเลิก',
   REFUNDED: 'เรียกเงินคืน',
 };
@@ -98,7 +98,7 @@ export const ROLE_LABELS: Record<RoleCode, string> = {
   DEAN: 'คณบดี',
   RDI_OFFICER: 'เจ้าหน้าที่สถาบันวิจัยฯ',
   ACADEMIC_OFFICE: 'สำนักส่งเสริมวิชาการฯ',
-  APPROVER: 'รองอธิการบดีฝ่ายวิจัยฯ',
+  APPROVER: 'รองอธิการบดีฝ่ายวิชาการ วิจัย และนวัตกรรม',
   FINANCE: 'การเงิน',
   ADMIN: 'ผู้ดูแลระบบ',
 };

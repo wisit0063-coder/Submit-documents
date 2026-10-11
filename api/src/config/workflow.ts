@@ -74,7 +74,7 @@ export const WORKFLOW_STEPS: readonly WorkflowStep[] = [
     status: RequestStatus.PENDING_APPROVAL,
     roleCode: 'APPROVER',
     nextStatus: RequestStatus.APPROVED,
-    labelTh: 'รองอธิการบดีฝ่ายวิจัยฯ อนุมัติ',
+    labelTh: 'รองอธิการบดีฝ่ายวิชาการ วิจัย และนวัตกรรม อนุมัติ',
     facultyScoped: false,
     canReturn: true,
   },
@@ -184,7 +184,9 @@ export const STATUS_LABELS_TH: Record<RequestStatus, string> = {
   PENDING_APPROVAL: 'รออนุมัติ',
   APPROVED: 'อนุมัติแล้ว',
   REJECTED: 'ไม่อนุมัติ',
-  PAID: 'จ่ายแล้ว',
+  // The system never moves money. This step only records that the bursar paid,
+  // so the label says so rather than implying the system did it.
+  PAID: 'บันทึกการเบิกจ่ายแล้ว',
   CANCELLED: 'ยกเลิก',
   REFUNDED: 'เรียกเงินคืน',
 };
@@ -195,7 +197,7 @@ export const ROLE_LABELS_TH: Record<string, string> = {
   DEAN: 'คณบดี',
   RDI_OFFICER: 'เจ้าหน้าที่สถาบันวิจัยและพัฒนา',
   ACADEMIC_OFFICE: 'ผู้อำนวยการสำนักส่งเสริมวิชาการฯ',
-  APPROVER: 'รองอธิการบดีฝ่ายวิจัยฯ',
+  APPROVER: 'รองอธิการบดีฝ่ายวิชาการ วิจัย และนวัตกรรม',
   FINANCE: 'งานการเงิน / กองคลัง',
   ADMIN: 'ผู้ดูแลระบบ',
 };

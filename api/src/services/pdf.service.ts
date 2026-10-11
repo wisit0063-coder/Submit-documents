@@ -261,9 +261,9 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
       { text: '3. คำรับรองของผู้ขอ', bold: true, margin: [0, 10, 0, 4] },
       {
         ul: [
-          `${request.certNotOnStudyLeave ? '[/]' : '[ ]'} ข้าพเจ้าไม่อยู่ระหว่างลาศึกษาต่อเต็มเวลา`,
+          `${request.certNotOnStudyLeave ? '[/]' : '[ ]'} ข้าพเจ้าไม่ได้จัดทำบทความนี้ขณะอยู่ระหว่างการศึกษาต่อ แม้ไม่เกี่ยวกับวิทยานิพนธ์`,
           `${request.certNotThesisPart ? '[/]' : '[ ]'} บทความนี้ไม่เป็นส่วนหนึ่งของวิทยานิพนธ์ของข้าพเจ้า`,
-          `${request.certNotDuplicate ? '[/]' : '[ ]'} บทความนี้ยังไม่เคยได้รับค่าตอบแทนจากมหาวิทยาลัย`,
+          `${request.certNotDuplicate ? '[/]' : '[ ]'} บทความนี้ยังไม่เคยได้รับค่าตอบแทนหรือรางวัลที่เข้าข่ายการสนับสนุนการตีพิมพ์จากมหาวิทยาลัย`,
         ],
         margin: [10, 0, 0, 6],
       },
