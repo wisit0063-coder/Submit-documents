@@ -101,13 +101,24 @@ export const listBudgetYears = asyncHandler(async (_req: Request, res: Response)
   res.json(serialize(await budgetService.listBudgetYears()));
 });
 
+/** Who is changing a fund ceiling, for the line the service writes. */
+function budgetActor(req: Request) {
+  const user = requireUser(req);
+  return { id: user.id, name: user.fullName, ipAddress: clientIp(req) };
+}
+
 export const createBudgetYear = asyncHandler(async (req: Request, res: Response) => {
-  res.status(201).json(serialize(await budgetService.createBudgetYear(req.body)));
+  const created = await budgetService.createBudgetYear(req.body, budgetActor(req));
+  res.status(201).json(serialize(created));
 });
 
 export const updateBudgetYear = asyncHandler(async (req: Request, res: Response) => {
-  const result = await budgetService.updateBudgetYear(idParam(req), req.body);
+  const result = await budgetService.updateBudgetYear(idParam(req), req.body, budgetActor(req));
   res.json(serialize(result));
+});
+
+export const listBudgetYearLogs = asyncHandler(async (req: Request, res: Response) => {
+  res.json(serialize(await budgetService.listBudgetYearLogs(idParam(req))));
 });
 
 export const listPayments = asyncHandler(async (req: Request, res: Response) => {
@@ -203,7 +214,8 @@ function reportFilter(req: Request) {
 }
 
 export const reportByFaculty = asyncHandler(async (req: Request, res: Response) => {
-  res.json(serialize(await reportService.reportByFaculty(reportFilter(req))));
+  const scope = reportService.reportFacultyScope(requireUser(req));
+  res.json(serialize(await reportService.reportByFaculty(reportFilter(req), scope)));
 });
 
 export const reportByTier = asyncHandler(async (req: Request, res: Response) => {
@@ -215,11 +227,13 @@ export const reportProcessingTime = asyncHandler(async (req: Request, res: Respo
 });
 
 export const reportQaIndicator = asyncHandler(async (req: Request, res: Response) => {
-  res.json(serialize(await reportService.reportQaIndicator(reportFilter(req))));
+  const scope = reportService.reportFacultyScope(requireUser(req));
+  res.json(serialize(await reportService.reportQaIndicator(reportFilter(req), scope)));
 });
 
 export const exportReport = asyncHandler(async (req: Request, res: Response) => {
-  const buffer = await reportService.exportExcel(reportFilter(req));
+  const scope = reportService.reportFacultyScope(requireUser(req));
+  const buffer = await reportService.exportExcel(reportFilter(req), scope);
   const filename = `cpru-publishing-fee-${Date.now()}.xlsx`;
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

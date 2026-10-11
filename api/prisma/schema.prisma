@@ -108,6 +108,7 @@ model User {
   uploadedFiles         RequestAttachment[] @relation("AttachmentUploader")
   verifiedFiles         RequestAttachment[] @relation("AttachmentVerifier")
   recordedPayment       Payment[]
+  budgetYearLogs        BudgetYearLog[]
 
   @@index([departmentId])
   @@index([facultyId])
@@ -196,11 +197,50 @@ model BudgetYear {
   isActive    Boolean  @default(false) @map("is_active")
   note        String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   requests Request[]
   payments Payment[]
+  logs     BudgetYearLog[]
 
   @@map("budget_years")
+}
+
+/// Every change to a fund ceiling, with the figure it replaced.
+///
+/// The ceiling is the one money value a person types in, and it used to be
+/// editable with no trace at all: budget_years carried only created_at, so
+/// nobody could say who raised a figure, when, or what it had been. Claims
+/// have request_status_logs standing in for signatures on paper; the fund the
+/// claims draw from had nothing.
+model BudgetYearLog {
+  id           BigInt           @id @default(autoincrement())
+  budgetYearId BigInt           @map("budget_year_id")
+  action       BudgetYearAction
+  actorId      BigInt?          @map("actor_id")
+  /// The name as it stood at the time. Accounts get renamed and position
+  /// accounts get handed to the next holder, and neither may rewrite who set a
+  /// figure years earlier (section 19.1).
+  actorName    String           @map("actor_name") @db.VarChar(255)
+  /// Null on CREATE: there was no previous figure.
+  previousAmount   Decimal? @map("previous_amount") @db.Decimal(14, 2)
+  newAmount        Decimal? @map("new_amount") @db.Decimal(14, 2)
+  previousIsActive Boolean? @map("previous_is_active")
+  newIsActive      Boolean? @map("new_is_active")
+  reason       String?          @db.Text
+  ipAddress    String?          @map("ip_address") @db.VarChar(45)
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  budgetYear BudgetYear @relation(fields: [budgetYearId], references: [id], onDelete: Cascade)
+  actor      User?      @relation(fields: [actorId], references: [id])
+
+  @@index([budgetYearId, createdAt])
+  @@map("budget_year_logs")
+}
+
+enum BudgetYearAction {
+  CREATE
+  UPDATE
 }
 
 // ---------------------------------------------------------------

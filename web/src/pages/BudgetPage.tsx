@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { formatDate, formatMoney } from '@/lib/format';
+import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
 import { SERIES } from '@/lib/chart';
 import {
   Alert,
@@ -23,9 +23,11 @@ import {
   Th,
   useToast,
 } from '@/components/ui';
-import type { BudgetYear } from '@/types';
+import { BUDGET_EDIT_ROLES } from '@/lib/access';
+import type { BudgetYear, BudgetYearLog } from '@/types';
 
 interface BudgetForm {
+  reason: string;
   year: string;
   totalAmount: string;
   startDate: string;
@@ -35,6 +37,7 @@ interface BudgetForm {
 }
 
 const EMPTY: BudgetForm = {
+  reason: '',
   year: '',
   totalAmount: '',
   startDate: '',
@@ -90,6 +93,91 @@ function BudgetBar({ year }: { year: BudgetYear }) {
   );
 }
 
+/**
+ * The change history of one fund year, loaded only when opened.
+ *
+ * The ceiling is the single money figure a person types in, and it used to be
+ * editable with nothing recorded at all. Each page view of this costs a round
+ * trip to a database on the other side of the world, so it stays folded until
+ * somebody asks for it.
+ */
+function BudgetHistory({ budgetYearId }: { budgetYearId: string }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['budget-year-logs', budgetYearId],
+    queryFn: () => api.get<BudgetYearLog[]>(`/budget/years/${budgetYearId}/logs`),
+    enabled: open,
+  });
+
+  return (
+    <div className="mt-4 border-t border-slate-100 pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="text-sm font-medium text-brand-700 hover:underline"
+      >
+        {open ? 'ซ่อนประวัติการแก้วงเงิน' : 'ประวัติการแก้วงเงิน'}
+      </button>
+
+      {open && (
+        <div className="mt-3">
+          {isLoading ? (
+            <div className="flex justify-center py-6">
+              <Spinner className="h-5 w-5 text-brand-600" />
+            </div>
+          ) : isError ? (
+            <ErrorState error={error} onRetry={() => void refetch()} />
+          ) : !data || data.length === 0 ? (
+            <p className="text-sm text-slate-500">ยังไม่มีการแก้ไขที่บันทึกไว้</p>
+          ) : (
+            <Table className="min-w-0">
+              <thead>
+                <tr>
+                  <Th>เมื่อ</Th>
+                  <Th>ผู้ดำเนินการ</Th>
+                  <Th>การเปลี่ยนแปลง</Th>
+                  <Th>เหตุผล</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((log) => (
+                  <tr key={log.id}>
+                    <Td className="whitespace-nowrap text-slate-600">
+                      {formatDateTime(log.createdAt)}
+                    </Td>
+                    <Td className="text-slate-800">{log.actorName}</Td>
+                    <Td className="text-slate-700">
+                      {log.action === 'CREATE' ? (
+                        <span>ตั้งวงเงิน {formatMoney(log.newAmount, false)} บาท</span>
+                      ) : (
+                        <div className="space-y-0.5">
+                          {log.previousAmount !== null && (
+                            <p className="tabular-nums">
+                              วงเงิน {formatMoney(log.previousAmount, false)} →{' '}
+                              <span className="font-semibold">
+                                {formatMoney(log.newAmount, false)}
+                              </span>{' '}
+                              บาท
+                            </p>
+                          )}
+                          {log.newIsActive !== null && (
+                            <p>{log.newIsActive ? 'เปิดใช้งานปีนี้' : 'ปิดใช้งานปีนี้'}</p>
+                          )}
+                        </div>
+                      )}
+                    </Td>
+                    <Td className="text-slate-600">{log.reason || '-'}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function BudgetPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -114,7 +202,14 @@ export function BudgetPage() {
         isActive: form.isActive,
         note: form.note || null,
       };
-      if (editing) return api.put(`/budget/years/${editing.id}`, payload);
+      if (editing) {
+        // Only sent when editing: the server demands one as soon as the figure
+        // itself changes, and records it in the year's history.
+        return api.put(`/budget/years/${editing.id}`, {
+          ...payload,
+          reason: form.reason || undefined,
+        });
+      }
       return api.post('/budget/years', payload);
     },
     onSuccess: async () => {
@@ -146,6 +241,7 @@ export function BudgetPage() {
 
   const openEdit = (year: BudgetYear) => {
     setForm({
+      reason: '',
       year: String(year.year),
       totalAmount: String(year.total),
       startDate: year.startDate.slice(0, 10),
@@ -156,6 +252,16 @@ export function BudgetPage() {
     setEditing(year);
   };
 
+  // Whether this edit moves the money, which is what makes a reason
+  // compulsory. Comparing numbers, not strings: "1500000" and "1500000.00" are
+  // the same ceiling.
+  const amountChanged =
+    Boolean(editing) && Number(form.totalAmount) !== Number(editing?.total ?? 0);
+  const reasonMissing = amountChanged && form.reason.trim().length < 5;
+
+  // The open year, when it is not the year today belongs to.
+  const stale = (years ?? []).find((year) => year.isStale) ?? null;
+
   return (
     <>
       <PageHeader
@@ -165,6 +271,30 @@ export function BudgetPage() {
           can('ADMIN') && <Button onClick={openCreate}>ตั้งวงเงินปีใหม่</Button>
         }
       />
+
+      {/* The fiscal year turns over on 1 October and nothing in the system
+          notices: claims carry on being numbered from whichever year is open,
+          with no error anywhere. The figure for a new year is a university
+          decision with no formula, so the system says this loudly instead of
+          inventing one and opening the year itself. */}
+      {stale && (
+        <div className="mb-4">
+          <Alert tone="warning" title="ปีงบประมาณที่เปิดใช้งานไม่ตรงกับปัจจุบัน">
+            <p>
+              ปีงบที่เปิดใช้งานอยู่คือ <strong>{stale.year}</strong> แต่วันนี้อยู่ในปีงบประมาณ{' '}
+              <strong>{stale.fiscalYearNow}</strong> แล้ว (ปีงบประมาณคือ 1 ต.ค. – 30 ก.ย.)
+            </p>
+            <p className="mt-1">
+              คำขอที่ยื่นตั้งแต่นี้จะได้เลขที่เป็น <strong>RQ-{stale.year}-xxxx</strong> ซึ่งผิดปี
+              และไปตัดวงเงินของปีที่ปิดไปแล้ว <strong>ระบบจะไม่ฟ้องอะไรเลย</strong>
+            </p>
+            <p className="mt-1">
+              วิธีแก้: กด "ตั้งวงเงินปีใหม่" สร้างปีงบ <strong>{stale.fiscalYearNow}</strong>{' '}
+              แล้วติ๊กเปิดใช้งาน ปีเก่าจะถูกปิดให้เองโดยอัตโนมัติ
+            </p>
+          </Alert>
+        </div>
+      )}
 
       <Alert tone="info">
         ยอดจองถูกตัดตั้งแต่วินาทีที่ผู้มีอำนาจอนุมัติ ไม่ใช่ตอนโอนเงิน
@@ -200,7 +330,7 @@ export function BudgetPage() {
               }
               description={`${formatDate(year.startDate)} - ${formatDate(year.endDate)}`}
               action={
-                can('ADMIN') && (
+                can(...BUDGET_EDIT_ROLES) && (
                   <Button variant="outline" size="sm" onClick={() => openEdit(year)}>
                     แก้ไข
                   </Button>
@@ -271,6 +401,8 @@ export function BudgetPage() {
               </div>
 
               {year.note && <p className="mt-3 text-sm text-slate-500">{year.note}</p>}
+
+              <BudgetHistory budgetYearId={year.id} />
             </Card>
           ))
         )}
@@ -285,7 +417,11 @@ export function BudgetPage() {
             <Button variant="outline" onClick={close}>
               ยกเลิก
             </Button>
-            <Button loading={save.isPending} onClick={() => save.mutate()}>
+            <Button
+              loading={save.isPending}
+              disabled={reasonMissing}
+              onClick={() => save.mutate()}
+            >
               บันทึก
             </Button>
           </>
@@ -330,6 +466,20 @@ export function BudgetPage() {
             onChange={(event) => setForm({ ...form, isActive: event.target.checked })}
             label="เปิดใช้งานปีนี้ (ปีที่เปิดอยู่เดิมจะถูกปิดอัตโนมัติ)"
           />
+          {editing && (
+            <Field
+              label="เหตุผลที่แก้วงเงิน"
+              hint="บังคับกรอกเมื่อยอดวงเงินเปลี่ยน อย่างน้อย 5 ตัวอักษร · จะถูกบันทึกไว้ในประวัติพร้อมชื่อผู้แก้"
+              required={amountChanged}
+              error={amountChanged && form.reason.trim().length < 5 ? 'กรุณาระบุเหตุผล' : undefined}
+            >
+              <Textarea
+                value={form.reason}
+                onChange={(event) => setForm({ ...form, reason: event.target.value })}
+              />
+            </Field>
+          )}
+
           <Field label="หมายเหตุ">
             <Textarea
               value={form.note}

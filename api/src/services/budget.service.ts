@@ -1,6 +1,7 @@
-import { Prisma, RequestStatus } from '@prisma/client';
+import { BudgetYearAction, Prisma, RequestStatus } from '@prisma/client';
 import { prisma, type Tx } from '../config/prisma';
 import { notFound, unprocessable } from '../utils/errors';
+import { fiscalYearOf } from '../utils/datetime';
 
 export interface BudgetSummary {
   year: number;
@@ -9,6 +10,16 @@ export interface BudgetSummary {
   reserved: number;
   paid: number;
   available: number;
+  /** The fiscal year today falls in, by the 1 Oct - 30 Sep rule. */
+  fiscalYearNow: number;
+  /**
+   * True when the year that is open for business is not the one today belongs
+   * to. Nothing breaks when it happens - which is the problem. Claims are
+   * still accepted, numbered from the open year, and charged to a ceiling that
+   * closed months ago, with no error anywhere. It happened for real on
+   * 11 Oct 2026, eleven days into 2570 with only 2569 on file.
+   */
+  isStale: boolean;
 }
 
 /**
@@ -43,6 +54,7 @@ export async function getBudgetSummary(
     _sum: { amount: true, refundAmount: true },
   });
 
+  const fiscalYearNow = fiscalYearOf(new Date());
   const total = Number(budgetYear.totalAmount);
   const reserved = Number(reservedAgg._sum.amountApproved ?? 0);
   const paidGross = Number(paidAgg._sum.amount ?? 0);
@@ -56,6 +68,10 @@ export async function getBudgetSummary(
     reserved,
     paid,
     available: total - reserved - paid,
+    fiscalYearNow,
+    // Only the open year can be out of date: a closed year is meant to be in
+    // the past, and listing one must not raise an alarm.
+    isStale: budgetYear.isActive && budgetYear.year !== fiscalYearNow,
   };
 }
 
@@ -100,21 +116,51 @@ export async function listBudgetYears() {
   );
 }
 
-export async function createBudgetYear(input: {
-  year: number;
-  totalAmount: number;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-  note?: string | null;
-}) {
+/**
+ * A fund year that is open for business needs money in it.
+ *
+ * Nothing stopped a ceiling of 0 on the active year, and the effect is not
+ * obvious from the form: claims can still be filed, but every final approval
+ * fails with BUDGET_EXCEEDED, so the whole fund silently stops paying out. A
+ * year still waiting for its allocation can sit at 0 as long as it is closed.
+ */
+function assertActiveYearHasMoney(isActive: boolean, totalAmount: number) {
+  if (isActive && totalAmount <= 0) {
+    throw unprocessable(
+      'ZERO_ACTIVE_BUDGET',
+      'ปีงบประมาณที่เปิดใช้งานต้องมีวงเงินมากกว่า 0 บาท ' +
+        'ถ้าตั้งเป็น 0 จะอนุมัติคำขอไม่ได้เลยทั้งระบบ (วงเงินคงเหลือไม่พอทุกครั้ง)',
+    );
+  }
+}
+
+/** Who did it, as the log has to remember them. */
+export interface BudgetActor {
+  id: bigint;
+  name: string;
+  ipAddress?: string | null;
+}
+
+export async function createBudgetYear(
+  input: {
+    year: number;
+    totalAmount: number;
+    startDate: string;
+    endDate: string;
+    isActive: boolean;
+    note?: string | null;
+  },
+  actor: BudgetActor,
+) {
+  assertActiveYearHasMoney(input.isActive, input.totalAmount);
+
   return prisma.$transaction(async (tx) => {
     // Only one active fiscal year at a time, otherwise new requests would not
     // know which pot they draw from.
     if (input.isActive) {
       await tx.budgetYear.updateMany({ where: { isActive: true }, data: { isActive: false } });
     }
-    return tx.budgetYear.create({
+    const created = await tx.budgetYear.create({
       data: {
         year: input.year,
         totalAmount: new Prisma.Decimal(input.totalAmount),
@@ -124,6 +170,25 @@ export async function createBudgetYear(input: {
         note: input.note ?? null,
       },
     });
+
+    // Written inside the same transaction as the figure itself: a ceiling that
+    // exists without a line saying who set it is exactly the gap this closes.
+    await tx.budgetYearLog.create({
+      data: {
+        budgetYearId: created.id,
+        action: BudgetYearAction.CREATE,
+        actorId: actor.id,
+        actorName: actor.name,
+        previousAmount: null,
+        newAmount: created.totalAmount,
+        previousIsActive: null,
+        newIsActive: created.isActive,
+        reason: input.note ?? null,
+        ipAddress: actor.ipAddress ?? null,
+      },
+    });
+
+    return created;
   });
 }
 
@@ -136,11 +201,22 @@ export async function updateBudgetYear(
     endDate: string;
     isActive: boolean;
     note: string | null;
+    reason: string;
   }>,
+  actor: BudgetActor,
 ) {
   return prisma.$transaction(async (tx) => {
     const existing = await tx.budgetYear.findUnique({ where: { id } });
     if (!existing) throw notFound('ไม่พบปีงบประมาณที่ระบุ');
+
+    const amountChanged =
+      input.totalAmount !== undefined &&
+      !new Prisma.Decimal(input.totalAmount).equals(existing.totalAmount);
+
+    assertActiveYearHasMoney(
+      input.isActive ?? existing.isActive,
+      input.totalAmount ?? Number(existing.totalAmount),
+    );
 
     if (input.totalAmount !== undefined) {
       const summary = await getBudgetSummary(id, tx);
@@ -153,6 +229,15 @@ export async function updateBudgetYear(
       }
     }
 
+    // A reason is only demanded when the money itself moves. Fixing a typo in
+    // the note, or opening a year, does not need one.
+    if (amountChanged && (input.reason ?? '').trim().length < 5) {
+      throw unprocessable(
+        'REASON_REQUIRED',
+        'การแก้วงเงินต้องระบุเหตุผลอย่างน้อย 5 ตัวอักษร เพื่อบันทึกไว้ในประวัติ',
+      );
+    }
+
     if (input.isActive) {
       await tx.budgetYear.updateMany({
         where: { isActive: true, id: { not: id } },
@@ -160,7 +245,7 @@ export async function updateBudgetYear(
       });
     }
 
-    return tx.budgetYear.update({
+    const updated = await tx.budgetYear.update({
       where: { id },
       data: {
         ...(input.year !== undefined ? { year: input.year } : {}),
@@ -173,5 +258,38 @@ export async function updateBudgetYear(
         ...(input.note !== undefined ? { note: input.note } : {}),
       },
     });
+
+    const activeChanged =
+      input.isActive !== undefined && input.isActive !== existing.isActive;
+
+    // Dates, the year number and the note alone leave no log line: the history
+    // is there for the money and for which pot is open, and filling it with
+    // every keystroke would bury those.
+    if (amountChanged || activeChanged) {
+      await tx.budgetYearLog.create({
+        data: {
+          budgetYearId: id,
+          action: BudgetYearAction.UPDATE,
+          actorId: actor.id,
+          actorName: actor.name,
+          previousAmount: amountChanged ? existing.totalAmount : null,
+          newAmount: amountChanged ? updated.totalAmount : null,
+          previousIsActive: activeChanged ? existing.isActive : null,
+          newIsActive: activeChanged ? updated.isActive : null,
+          reason: input.reason?.trim() || null,
+          ipAddress: actor.ipAddress ?? null,
+        },
+      });
+    }
+
+    return updated;
+  });
+}
+
+/** The change history of one fund year, newest first. */
+export async function listBudgetYearLogs(budgetYearId: bigint) {
+  return prisma.budgetYearLog.findMany({
+    where: { budgetYearId },
+    orderBy: { createdAt: 'desc' },
   });
 }

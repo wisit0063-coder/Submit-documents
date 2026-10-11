@@ -140,6 +140,10 @@ export interface RequestSummary {
   journalName: string;
   status: RequestStatus;
   calendarYear: number;
+  // The year the claim was filed, which is the year its entitlement is counted
+  // against - not calendarYear, which is the year the article was published.
+  // The two differ for a December article filed in the January grace window.
+  entitlementYear: number | null;
   viewScope?: ViewScope;
   amountRequested: number | null;
   amountApproved: number | null;
@@ -199,6 +203,12 @@ export interface BudgetSummary {
   reserved: number;
   paid: number;
   available: number;
+  // The fiscal year today falls in (1 Oct - 30 Sep), worked out by the server
+  // so it does not depend on the clock of whoever opened the page.
+  fiscalYearNow: number;
+  // The open year is not the year today belongs to - new claims are being
+  // numbered and charged against the wrong one, silently.
+  isStale: boolean;
 }
 
 export interface BudgetYear extends BudgetSummary {
@@ -207,6 +217,20 @@ export interface BudgetYear extends BudgetSummary {
   endDate: string;
   isActive: boolean;
   note: string | null;
+}
+
+/** One line of the change history of a fund year, newest first. */
+export interface BudgetYearLog {
+  id: string;
+  action: 'CREATE' | 'UPDATE';
+  // The name as it stood when the change was made, not the account's name now.
+  actorName: string;
+  previousAmount: number | null;
+  newAmount: number | null;
+  previousIsActive: boolean | null;
+  newIsActive: boolean | null;
+  reason: string | null;
+  createdAt: string;
 }
 
 export interface Paged<T> {

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate, requireCronToken, requireRoles } from '../middleware/auth';
+import { BUDGET_EDIT_ROLES } from '../config/authz';
 import { validateBody, validateQuery } from '../middleware/validate';
 import { uploadAttachment as upload } from '../middleware/upload';
 import * as authController from '../controllers/auth.controller';
@@ -17,6 +18,7 @@ import {
 import {
   changePasswordSchema,
   budgetYearSchema,
+  budgetYearUpdateSchema,
   createUserSchema,
   forgotPasswordSchema,
   journalTierSchema,
@@ -146,12 +148,23 @@ router.patch(
 
 // --- Budget and payments --------------------------------------
 router.get('/budget/summary', requireRoles('FINANCE', 'ADMIN', 'APPROVER'), misc.budgetSummary);
-router.get('/budget/years', requireRoles('FINANCE', 'ADMIN'), misc.listBudgetYears);
+// The approver reads this list: /budget is open to them and the page loads
+// nothing else, so without it they reached a page that only showed a permission
+// error. Creating and editing a budget year stays with ADMIN below.
+router.get('/budget/years', requireRoles('FINANCE', 'ADMIN', 'APPROVER'), misc.listBudgetYears);
+router.get(
+  '/budget/years/:id/logs',
+  requireRoles('FINANCE', 'ADMIN', 'APPROVER'),
+  misc.listBudgetYearLogs,
+);
 router.post('/budget/years', requireRoles('ADMIN'), validateBody(budgetYearSchema), misc.createBudgetYear);
+// The ceiling itself is editable by the offices in BUDGET_EDIT_ROLES - one
+// list, read by the button on the page as well. Creating a year and opening or
+// closing one stay with ADMIN above: those decide which pot claims draw from.
 router.put(
   '/budget/years/:id',
-  requireRoles('ADMIN'),
-  validateBody(budgetYearSchema.partial()),
+  requireRoles(...BUDGET_EDIT_ROLES),
+  validateBody(budgetYearUpdateSchema),
   misc.updateBudgetYear,
 );
 router.get('/payments', requireRoles('FINANCE', 'ADMIN'), misc.listPayments);
@@ -208,8 +221,23 @@ router.patch(
 
 // --- Reports --------------------------------------------------
 router.get('/dashboard', misc.dashboard);
-router.get('/reports/by-faculty', requireRoles('ADMIN', 'FINANCE', 'APPROVER'), misc.reportByFaculty);
+// DEAN and RDI_OFFICER added 11 ต.ค. 2569. RDI_OFFICER owns the process under
+// ประกาศ ข้อ 9(1) and sees every faculty; a DEAN is narrowed to their own by
+// reportFacultyScope, the same scope their dashboard and request list use.
+router.get(
+  '/reports/by-faculty',
+  requireRoles('ADMIN', 'FINANCE', 'APPROVER', 'RDI_OFFICER', 'DEAN', 'ACADEMIC_OFFICE'),
+  misc.reportByFaculty,
+);
 router.get('/reports/by-tier', requireRoles('ADMIN', 'FINANCE'), misc.reportByTier);
-router.get('/reports/processing-time', requireRoles('ADMIN'), misc.reportProcessingTime);
-router.get('/reports/qa-indicator', requireRoles('FACULTY_QA', 'ADMIN'), misc.reportQaIndicator);
-router.get('/reports/export', requireRoles('ADMIN', 'FINANCE'), misc.exportReport);
+router.get(
+  '/reports/processing-time',
+  requireRoles('ADMIN', 'RDI_OFFICER'),
+  misc.reportProcessingTime,
+);
+router.get(
+  '/reports/qa-indicator',
+  requireRoles('FACULTY_QA', 'ADMIN', 'DEAN'),
+  misc.reportQaIndicator,
+);
+router.get('/reports/export', requireRoles('ADMIN', 'FINANCE', 'FACULTY_QA'), misc.exportReport);

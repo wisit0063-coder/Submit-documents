@@ -54,6 +54,16 @@ export const budgetYearSchema = z.object({
   note: z.string().trim().max(1000).optional().nullable(),
 });
 
+/**
+ * Editing a fund year. Everything is optional because the page sends only what
+ * changed, and a reason is here so a change to the ceiling can be explained;
+ * the service is what insists on one when the money actually moves, since it is
+ * the only place that can see the figure being replaced.
+ */
+export const budgetYearUpdateSchema = budgetYearSchema.partial().extend({
+  reason: z.string().trim().max(500).optional(),
+});
+
 export const createUserSchema = z.object({
   username: z.string().trim().min(3).max(100),
   email: z.string().trim().email('รูปแบบอีเมลไม่ถูกต้อง'),
@@ -83,7 +93,11 @@ export const updateUserSchema = createUserSchema.partial().extend({
 export const userStatusSchema = z.object({ isActive: z.boolean() });
 
 export const paySchema = z.object({
-  voucherNo: z.string().trim().min(1, 'กรุณาระบุเลขที่ฎีกา').max(50),
+  // Optional on purpose (11 ต.ค. 2569): the voucher number comes back from the
+  // bursar days after the paperwork is handed over, so demanding it up front
+  // would block the one person who happens to hear the outcome from recording
+  // anything at all. It can be filled in later.
+  voucherNo: z.string().trim().max(50).optional(),
   paidAt: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'วันที่ไม่ถูกต้อง'),
   note: z.string().trim().max(1000).optional().nullable(),
 });
