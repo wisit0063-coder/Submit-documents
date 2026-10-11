@@ -20,24 +20,61 @@ function optionalId(value: string | undefined): bigint | undefined {
 function baseWhere(filter: ReportFilter) {
   const budgetYearId = optionalId(filter.budgetYearId);
   const facultyId = optionalId(filter.facultyId);
+  // A status the caller asked for, but never DRAFT: an unsubmitted form is not
+  // a claim, and every other part of the system keeps other people's drafts out
+  // of sight. Counting them made a faculty appear in the report, and a row in
+  // the Excel export, because somebody had started typing.
+  const asked =
+    filter.status && filter.status in RequestStatus
+      ? (filter.status as RequestStatus)
+      : undefined;
   return {
     ...(filter.year ? { calendarYear: filter.year } : {}),
     ...(budgetYearId ? { budgetYearId } : {}),
     ...(facultyId ? { facultyId } : {}),
-    ...(filter.status && filter.status in RequestStatus
-      ? { status: filter.status as RequestStatus }
-      : {}),
+    ...(asked && asked !== RequestStatus.DRAFT
+      ? { status: asked }
+      : { status: { not: RequestStatus.DRAFT } }),
   };
 }
 
+/**
+ * Which faculties a caller may see aggregate numbers for. `null` means every
+ * faculty; an array - possibly empty - means only those.
+ *
+ * A DEAN or FACULTY_QA bound to a faculty sees that faculty alone, the same
+ * scope the dashboard and the request list already give them, so opening a
+ * report cannot show more than the rest of the app does. RDI_OFFICER is
+ * university-wide because ประกาศ 2131/2566 ข้อ 9(1) makes that office the owner
+ * of the whole process.
+ */
+export function reportFacultyScope(user: AuthUser): bigint[] | null {
+  const universityWide = ['ADMIN', 'FINANCE', 'APPROVER', 'RDI_OFFICER', 'ACADEMIC_OFFICE'];
+  if (user.roles.some((role) => universityWide.includes(role))) return null;
+
+  const scopes = user.roleScopes.filter(
+    (scope) => scope.roleCode === 'FACULTY_QA' || scope.roleCode === 'DEAN',
+  );
+  // Granted without a faculty: covers every faculty, matching the inbox rule.
+  if (scopes.some((scope) => scope.facultyId === null)) return null;
+  return scopes.map((scope) => scope.facultyId).filter((id): id is bigint => id !== null);
+}
+
 /** Count and money per faculty, split into requested, approved and paid. */
-export async function reportByFaculty(filter: ReportFilter) {
+export async function reportByFaculty(filter: ReportFilter, allowed: bigint[] | null = null) {
   // The faculty filter narrows the list of faculties to report on. It used to
   // be applied inside the per-faculty query, where `facultyId: faculty.id`
   // overwrote it - so picking a faculty still listed every faculty.
   const onlyFaculty = optionalId(filter.facultyId);
+  // Asking for a faculty outside the caller's scope returns nothing rather than
+  // quietly widening to the faculties they are allowed to see.
+  if (allowed && onlyFaculty !== undefined && !allowed.includes(onlyFaculty)) return [];
+
   const faculties = await prisma.faculty.findMany({
-    where: { isActive: true, ...(onlyFaculty ? { id: onlyFaculty } : {}) },
+    where: {
+      isActive: true,
+      ...(onlyFaculty !== undefined ? { id: onlyFaculty } : allowed ? { id: { in: allowed } } : {}),
+    },
     orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
   });
 
@@ -164,11 +201,16 @@ export async function reportProcessingTime(filter: ReportFilter) {
 }
 
 /** Published-article counts per faculty and year for the QA indicator returns. */
-export async function reportQaIndicator(filter: ReportFilter) {
+export async function reportQaIndicator(filter: ReportFilter, allowed: bigint[] | null = null) {
   const requests = await prisma.request.findMany({
+    // AND rather than one spread object: the scope must sit beside the caller's
+    // own facultyId filter, not overwrite it.
     where: {
-      ...baseWhere(filter),
-      status: { in: ENTITLEMENT_STATUSES },
+      AND: [
+        baseWhere(filter),
+        { status: { in: ENTITLEMENT_STATUSES } },
+        ...(allowed ? [{ facultyId: { in: allowed } }] : []),
+      ],
     },
     select: {
       qaIndicatorYear: true,
@@ -201,9 +243,23 @@ export async function reportQaIndicator(filter: ReportFilter) {
 }
 
 /** Flat export for the finance office. exceljs is pure JS - no native build. */
-export async function exportExcel(filter: ReportFilter): Promise<ExcelJS.Buffer> {
+export async function exportExcel(
+  filter: ReportFilter,
+  allowed: bigint[] | null = null,
+): Promise<ExcelJS.Buffer> {
+  const onlyFaculty = optionalId(filter.facultyId);
+  // Faculty QA may download this, and QA is bound to its own faculty: asking
+  // for another one returns nothing rather than quietly widening back to the
+  // faculties the caller does happen to be allowed to see. Same rule as
+  // reportByFaculty.
+  if (allowed && onlyFaculty !== undefined && !allowed.includes(onlyFaculty)) {
+    allowed = [];
+  }
+
   const requests = await prisma.request.findMany({
-    where: baseWhere(filter),
+    where: {
+      AND: [baseWhere(filter), ...(allowed ? [{ facultyId: { in: allowed } }] : [])],
+    },
     orderBy: { requestNo: 'asc' },
     include: {
       // staffTrack rides along so the export can answer "how much went to
@@ -234,7 +290,9 @@ export async function exportExcel(filter: ReportFilter): Promise<ExcelJS.Buffer>
     { header: 'วารสาร', key: 'journal', width: 36 },
     { header: 'ฐานข้อมูล', key: 'tier', width: 18 },
     { header: 'วันที่ตีพิมพ์', key: 'publishedAt', width: 16 },
-    { header: 'ปีปฏิทิน', key: 'calendarYear', width: 10 },
+    { header: 'ปีปฏิทินที่ตีพิมพ์', key: 'calendarYear', width: 16 },
+    { header: 'ปีที่ใช้สิทธิ์ (ปีที่ยื่น)', key: 'entitlementYear', width: 18 },
+    { header: 'ปีตัวชี้วัด QA (พ.ศ.)', key: 'qaIndicatorYear', width: 18 },
     { header: 'ยอดที่ขอ', key: 'requested', width: 14 },
     { header: 'ยอดที่อนุมัติ', key: 'approved', width: 14 },
     { header: 'สถานะ', key: 'status', width: 20 },
@@ -254,6 +312,8 @@ export async function exportExcel(filter: ReportFilter): Promise<ExcelJS.Buffer>
       tier: request.journalTier.nameTh,
       publishedAt: formatThaiDate(request.publishedAt),
       calendarYear: request.calendarYear,
+      entitlementYear: request.entitlementYear ?? '',
+      qaIndicatorYear: request.qaIndicatorYear ?? '',
       requested: Number(request.amountRequested),
       approved: request.amountApproved ? Number(request.amountApproved) : null,
       status: STATUS_LABELS_TH[request.status],
@@ -282,7 +342,14 @@ export async function exportExcel(filter: ReportFilter): Promise<ExcelJS.Buffer>
 function dashboardScope(user: AuthUser): { where: Prisma.RequestWhereInput; label: DashboardScope } {
   const universityWide = ['ADMIN', 'FINANCE', 'APPROVER', 'RDI_OFFICER', 'ACADEMIC_OFFICE'];
   if (user.roles.some((role) => universityWide.includes(role))) {
-    return { where: {}, label: 'UNIVERSITY' };
+    // Someone else's draft is private work until it is filed, which is the rule
+    // every other branch here applies. Counting them university-wide put a
+    // "ฉบับร่าง" figure on an executive's dashboard built from forms nobody had
+    // submitted, while a dean - closer to the claimant - was shown none.
+    return {
+      where: { OR: [{ userId: user.id }, { status: { not: RequestStatus.DRAFT } }] },
+      label: 'UNIVERSITY',
+    };
   }
 
   const reviewerScopes = user.roleScopes.filter(

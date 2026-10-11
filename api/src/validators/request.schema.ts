@@ -58,6 +58,9 @@ export const listRequestsSchema = z.object({
   status: z.string().optional(),
   year: z.coerce.number().int().min(2000).max(3000).optional(),
   facultyId: idString.optional(),
+  // "1" narrows the list to the caller's own claims. It can only ever remove
+  // rows the visibility filter already allowed, never add any.
+  mine: z.enum(['0', '1']).optional(),
   q: z.string().trim().max(200).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),

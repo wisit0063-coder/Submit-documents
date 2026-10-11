@@ -63,7 +63,7 @@ export async function addAttachment(
 export async function openAttachment(user: AuthUser, attachmentId: bigint) {
   const attachment = await prisma.requestAttachment.findUnique({
     where: { id: attachmentId },
-    include: { request: { select: { id: true, userId: true, facultyId: true } } },
+    include: { request: { select: { id: true, userId: true, facultyId: true, status: true } } },
   });
   if (!attachment) throw notFound('ไม่พบไฟล์แนบที่ระบุ');
   if (!canViewRequest(user, attachment.request)) {

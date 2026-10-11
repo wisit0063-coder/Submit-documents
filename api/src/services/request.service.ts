@@ -139,9 +139,16 @@ export async function writeStatusLog(
  */
 export function canViewRequest(
   user: AuthUser,
-  request: { userId: bigint; facultyId: bigint },
+  request: { userId: bigint; facultyId: bigint; status?: RequestStatus },
 ): boolean {
   if (request.userId === user.id) return true;
+  // An unsubmitted draft belongs to whoever is writing it. The listing has
+  // always hidden other people's drafts, but this function never looked at the
+  // status, so a reviewer, the approver or finance could open one by typing its
+  // id - reading the article, its attachments and printing the memo - before
+  // the claimant had filed anything. No step of the workflow needs it: a draft
+  // is in nobody's queue, and setQaIndicatorYear already refuses one.
+  if (request.status === RequestStatus.DRAFT) return false;
   if (user.roles.includes('ADMIN') || user.roles.includes('FINANCE')) return true;
 
   const scopedRoles = ['FACULTY_QA', 'DEAN'];
@@ -201,7 +208,12 @@ function summariseForPeers<T extends { userId: bigint; facultyId: bigint }>(
  * visibility is derived from the roles of the caller alone.
  */
 function visibilityFilter(user: AuthUser): Prisma.RequestWhereInput {
-  if (user.roles.includes('ADMIN') || user.roles.includes('FINANCE')) return {};
+  // Everything except other people's drafts, which canViewRequest now refuses
+  // to open: listing a row that cannot be opened is the dead link this page
+  // used to have for colleagues' claims.
+  if (user.roles.includes('ADMIN') || user.roles.includes('FINANCE')) {
+    return { OR: [{ userId: user.id }, { status: { not: RequestStatus.DRAFT } }] };
+  }
 
   const or: Prisma.RequestWhereInput[] = [{ userId: user.id }];
 
@@ -246,6 +258,10 @@ export async function listRequests(user: AuthUser, query: ListRequestsQuery) {
   }
   if (query.year) and.push({ calendarYear: query.year });
   if (query.facultyId) and.push({ facultyId: BigInt(query.facultyId) });
+  // Added on top of visibilityFilter, so it narrows and never widens. Lets the
+  // list page separate "my claims" from colleagues' rows without paging through
+  // a mixed result set, where a page could hold no rows of the caller's own.
+  if (query.mine === '1') and.push({ userId: user.id });
   if (query.q) {
     and.push({
       OR: [
@@ -292,7 +308,7 @@ export async function getRequestDetail(user: AuthUser, id: bigint): Promise<Requ
 export async function getTimeline(user: AuthUser, id: bigint) {
   const request = await prisma.request.findUnique({
     where: { id },
-    select: { id: true, userId: true, facultyId: true },
+    select: { id: true, userId: true, facultyId: true, status: true },
   });
   if (!request) throw notFound('ไม่พบคำขอที่ระบุ');
   if (!canViewRequest(user, request)) throw forbidden('คุณไม่มีสิทธิ์เข้าถึงคำขอนี้');
