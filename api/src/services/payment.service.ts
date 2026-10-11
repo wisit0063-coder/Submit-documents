@@ -13,7 +13,7 @@ import { notifyStatusChange, notifyPlain } from '../notifications/dispatcher';
 export async function recordPayment(
   user: AuthUser,
   requestId: bigint,
-  input: { voucherNo: string; paidAt: string; note?: string | null },
+  input: { voucherNo?: string; paidAt: string; note?: string | null },
   ipAddress: string | null,
 ) {
   const request = await prisma.request.findUnique({
@@ -39,7 +39,7 @@ export async function recordPayment(
       data: {
         requestId: request.id,
         budgetYearId: request.budgetYearId,
-        voucherNo: input.voucherNo,
+        voucherNo: input.voucherNo?.trim() ? input.voucherNo.trim() : null,
         amount: request.amountApproved as Prisma.Decimal,
         paidAt: new Date(input.paidAt),
         recordedBy: user.id,
@@ -57,7 +57,9 @@ export async function recordPayment(
       fromStatus: RequestStatus.APPROVED,
       toStatus: RequestStatus.PAID,
       actorId: user.id,
-      note: `บันทึกจ่ายตามฎีกาเลขที่ ${input.voucherNo}`,
+      note: input.voucherNo?.trim()
+        ? `บันทึกการเบิกจ่ายตามฎีกาเลขที่ ${input.voucherNo.trim()}`
+        : 'บันทึกการเบิกจ่าย ยังไม่ได้ระบุเลขที่ฎีกา',
       ipAddress,
     });
 
@@ -72,7 +74,9 @@ export async function recordPayment(
     facultyId: updated.facultyId,
     toStatus: RequestStatus.PAID,
     actorName: user.fullName,
-    note: `เลขที่ฎีกา ${input.voucherNo}`,
+    note: input.voucherNo?.trim()
+      ? `เลขที่ฎีกา ${input.voucherNo.trim()}`
+      : 'ยังไม่ได้ระบุเลขที่ฎีกา',
   });
 
   return updated;
