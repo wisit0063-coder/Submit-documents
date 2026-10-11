@@ -37,7 +37,7 @@ export function InboxPage() {
 
       {overdue.length > 0 && (
         <div className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-900 ring-1 ring-inset ring-rose-200">
-          มี {overdue.length} เรื่องค้างเกิน 5 วันทำการ ระบบได้ส่งอีเมลเตือนแล้ว
+          มี {overdue.length} เรื่องค้างเกิน 5 วันทำการ ระบบจะส่งอีเมลเตือนในรอบถัดไป
         </div>
       )}
 

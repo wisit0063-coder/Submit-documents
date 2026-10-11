@@ -15,6 +15,7 @@ import { useAuth, REVIEWER_ROLES } from '@/lib/auth';
 import { formatMoney, personName, STATUS_LABELS, STATUS_TONE } from '@/lib/format';
 import { axisProps, gridProps, monthLabel, SERIES, tooltipStyle } from '@/lib/chart';
 import {
+  Alert,
   Badge,
   Button,
   Card,
@@ -77,6 +78,12 @@ function StatTile({
 export function DashboardPage() {
   const { user, quota, can } = useAuth();
   const isReviewer = Boolean(user?.roles.some((role) => REVIEWER_ROLES.includes(role)));
+  // Same test the sidebar and the claim list use: somebody who only files
+  // claims. Their "recent" card asks for their own rows alone, because the
+  // unsummarised list also carries colleagues' submitted claims, and a person
+  // who has never filed anything would otherwise open the dashboard to five
+  // rows belonging to other people.
+  const isPlainRequester = !can(...REVIEWER_ROLES, 'FINANCE', 'ADMIN') && can('RESEARCHER');
 
   const {
     data: dashboard,
@@ -90,8 +97,12 @@ export function DashboardPage() {
   });
 
   const { data: recent } = useQuery({
-    queryKey: ['requests', 'recent'],
-    queryFn: () => api.get<Paged<RequestSummary>>('/requests', { pageSize: 5 }),
+    queryKey: ['requests', 'recent', isPlainRequester],
+    queryFn: () =>
+      api.get<Paged<RequestSummary>>('/requests', {
+        pageSize: 5,
+        ...(isPlainRequester ? { mine: '1' } : {}),
+      }),
   });
 
   const { data: inbox } = useQuery({
@@ -184,11 +195,22 @@ export function DashboardPage() {
           tone={(counts.RETURNED ?? 0) > 0 ? 'warning' : 'default'}
         />
         <StatTile
-          label="อนุมัติแล้ว / จ่ายแล้ว"
-          value={`${counts.APPROVED ?? 0} / ${counts.PAID ?? 0}`}
+          label="อนุมัติแล้ว"
+          value={String((counts.APPROVED ?? 0) + (counts.PAID ?? 0))}
+          sub={`บันทึกการเบิกจ่ายแล้ว ${counts.PAID ?? 0} เรื่อง`}
           tone="success"
         />
       </div>
+
+      {budget?.isStale && (
+        <div className="mb-4">
+          <Alert tone="warning" title="ปีงบประมาณที่เปิดใช้งานไม่ตรงกับปัจจุบัน">
+            ปีงบที่เปิดใช้งานคือ <strong>{budget.year}</strong> แต่วันนี้อยู่ในปีงบ{' '}
+            <strong>{budget.fiscalYearNow}</strong> แล้ว · คำขอใหม่จะได้เลขที่ผิดปีและตัดวงเงินของปีที่ปิดแล้ว
+            · ไปที่เมนู <strong>งบประมาณ</strong> เพื่อสร้างปีงบใหม่
+          </Alert>
+        </div>
+      )}
 
       {budget && (
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -354,9 +376,16 @@ export function DashboardPage() {
               {recent.items.map((request) => (
                 <tr key={request.id} className="hover:bg-slate-50">
                   <Td>
-                    <Link to={`/requests/${request.id}`} className="font-medium text-brand-700 hover:underline">
-                      {request.requestNo}
-                    </Link>
+                    {/* summariseForPeers marks rows the detail endpoint will
+                        refuse; linking them produced a permission error that
+                        reads as a broken system. */}
+                    {request.viewScope === 'SUMMARY' ? (
+                      <span className="font-medium text-slate-500">{request.requestNo}</span>
+                    ) : (
+                      <Link to={`/requests/${request.id}`} className="font-medium text-brand-700 hover:underline">
+                        {request.requestNo}
+                      </Link>
+                    )}
                   </Td>
                   <Td className="max-w-md">
                     <span className="line-clamp-2 text-slate-700">{request.articleTitle}</span>

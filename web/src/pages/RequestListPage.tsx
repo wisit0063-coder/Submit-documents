@@ -25,6 +25,7 @@ import {
   Td,
   Th,
 } from '@/components/ui';
+import { claimableYears } from '@/lib/years';
 import type { Faculty, Paged, RequestStatus, RequestSummary } from '@/types';
 
 const STATUS_FILTERS: { value: string; label: string }[] = [
@@ -36,12 +37,17 @@ const STATUS_FILTERS: { value: string; label: string }[] = [
   },
   { value: 'RETURNED', label: 'ตีกลับให้แก้ไข' },
   { value: 'APPROVED', label: 'อนุมัติแล้ว' },
-  { value: 'PAID', label: 'จ่ายแล้ว' },
+  { value: 'PAID', label: 'บันทึกการเบิกจ่ายแล้ว' },
   { value: 'REJECTED,CANCELLED', label: 'ไม่อนุมัติ / ยกเลิก' },
 ];
 
-const currentYear = new Date().getFullYear();
-const YEARS = [currentYear + 1, currentYear, currentYear - 1, currentYear - 2];
+// Announcement 2131/2566 took effect in 2023, and rule 8 requires the article
+// to be published in the calendar year it is claimed in, so no row can carry a
+// year older than that. The list therefore grows downwards from the clock
+// instead of sliding: a four-year window would hide 2566 once 2570 arrives,
+// leaving older claims in the database but unreachable from this filter.
+// The extra year ahead is there because journals date some issues forward.
+const YEARS = claimableYears();
 
 export function RequestListPage() {
   const { can } = useAuth();
@@ -52,19 +58,40 @@ export function RequestListPage() {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
 
+  // A reviewer sees several units, so the faculty filter is meaningful to them.
+  // Someone who only files claims never sees past their own unit, so offering
+  // all six units would only ever return an empty list.
+  const isReviewer = can(
+    'ADMIN',
+    'FINANCE',
+    'RDI_OFFICER',
+    'ACADEMIC_OFFICE',
+    'APPROVER',
+    'DEAN',
+    'FACULTY_QA',
+  );
+  const isPlainRequester = !isReviewer && can('RESEARCHER');
+
+  // Own claims first: opening the page on a mixed list is confusing, because a
+  // requester with no claims of their own sees only colleagues' rows.
+  const [scope, setScope] = useState<'MINE' | 'UNIT'>('MINE');
+  const mine = isPlainRequester && scope === 'MINE' ? '1' : undefined;
+
   const { data: faculties } = useQuery({
     queryKey: ['faculties'],
     queryFn: () => api.get<Faculty[]>('/faculties'),
     staleTime: 30 * 60_000,
+    enabled: isReviewer,
   });
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['requests', { status, year, facultyId, query, page }],
+    queryKey: ['requests', { status, year, facultyId, query, page, mine }],
     queryFn: () =>
       api.get<Paged<RequestSummary>>('/requests', {
         status,
         year,
         facultyId,
+        mine,
         q: query,
         page,
         pageSize: 20,
@@ -75,17 +102,17 @@ export function RequestListPage() {
   const hasPeerRows = (data?.items ?? []).some((item) => item.viewScope === 'SUMMARY');
   // The owner column also has to appear for a plain researcher once colleagues'
   // claims show up, otherwise those rows have no name against them.
-  const canSeeOthers =
-    can('ADMIN', 'FINANCE', 'RDI_OFFICER', 'ACADEMIC_OFFICE', 'APPROVER', 'DEAN', 'FACULTY_QA') ||
-    hasPeerRows;
+  const canSeeOthers = isReviewer || hasPeerRows;
 
   return (
     <>
       <PageHeader
         title="คำขอรับค่าตอบแทน"
         description={
-          hasPeerRows
-            ? 'รายการคำขอของคุณ และคำขอที่ยื่นแล้วของเพื่อนร่วมหน่วยงาน (ของเพื่อนดูได้เฉพาะรายการย่อ ไม่แสดงจำนวนเงินและเปิดรายละเอียดไม่ได้)'
+          isPlainRequester
+            ? scope === 'MINE'
+              ? 'คำขอที่คุณเป็นผู้ยื่นเอง'
+              : 'คำขอที่ยื่นแล้วของหน่วยงานคุณ ของเพื่อนร่วมหน่วยงานดูได้เฉพาะรายการย่อ ไม่แสดงจำนวนเงินและเปิดรายละเอียดไม่ได้'
             : 'รายการคำขอที่คุณมีสิทธิ์เข้าถึง ระบบกรองตามบทบาทให้อัตโนมัติ'
         }
         action={
@@ -98,6 +125,34 @@ export function RequestListPage() {
       />
 
       <Card className="mb-4" bodyClassName="p-4">
+        {isPlainRequester && (
+          // Two scopes rather than one mixed list: "mine" is what the page is
+          // for, the unit view is there when someone wants to see what else is
+          // in flight around them.
+          <div className="mb-4 flex gap-2">
+            <Button
+              size="sm"
+              variant={scope === 'MINE' ? 'primary' : 'outline'}
+              onClick={() => {
+                setScope('MINE');
+                setPage(1);
+              }}
+            >
+              คำขอของฉัน
+            </Button>
+            <Button
+              size="sm"
+              variant={scope === 'UNIT' ? 'primary' : 'outline'}
+              onClick={() => {
+                setScope('UNIT');
+                setPage(1);
+              }}
+            >
+              ของหน่วยงาน
+            </Button>
+          </div>
+        )}
+
         {/* Filters sit in one row above the results. */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="สถานะ">
@@ -133,7 +188,7 @@ export function RequestListPage() {
             </Select>
           </Field>
 
-          {canSeeOthers && (
+          {isReviewer && (
             <Field label="คณะ">
               <Select
                 value={facultyId}
@@ -183,8 +238,16 @@ export function RequestListPage() {
           <ErrorState error={error} onRetry={() => void refetch()} />
         ) : !data || data.items.length === 0 ? (
           <EmptyState
-            title="ไม่พบคำขอตามเงื่อนไขที่เลือก"
-            description="ลองปรับตัวกรองหรือคำค้นหาใหม่อีกครั้ง"
+            title={
+              isPlainRequester && scope === 'MINE' && !status && !year && !query
+                ? 'คุณยังไม่มีคำขอในระบบ'
+                : 'ไม่พบคำขอตามเงื่อนไขที่เลือก'
+            }
+            description={
+              isPlainRequester && scope === 'MINE' && !status && !year && !query
+                ? 'กดปุ่ม "ยื่นคำขอใหม่" ด้านบนเพื่อเริ่มคำขอแรก'
+                : 'ลองปรับตัวกรองหรือคำค้นหาใหม่อีกครั้ง'
+            }
           />
         ) : (
           <>
@@ -194,7 +257,9 @@ export function RequestListPage() {
                   <Th>เลขที่ / วันที่ตีพิมพ์</Th>
                   {canSeeOthers && <Th>ผู้ขอ</Th>}
                   <Th>บทความ</Th>
-                  <Th>ฐานข้อมูล</Th>
+                  {/* Lowest-value column: dropped on narrow screens so the
+                      amount stays on screen instead of being scrolled off. */}
+                  <Th className="hidden lg:table-cell">ฐานข้อมูล</Th>
                   <Th>สถานะ</Th>
                   <Th className="text-right">จำนวนเงิน</Th>
                 </tr>
@@ -238,7 +303,7 @@ export function RequestListPage() {
                         {request.journalName}
                       </span>
                     </Td>
-                    <Td>
+                    <Td className="hidden lg:table-cell">
                       <span className="text-xs text-slate-600">{request.journalTier.nameTh}</span>
                     </Td>
                     <Td>

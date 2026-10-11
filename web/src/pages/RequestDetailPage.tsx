@@ -266,7 +266,9 @@ export function RequestDetailPage() {
           </Badge>
           <span className="text-sm text-slate-500">
             {request.sequenceInYear
-              ? `ใช้สิทธิ์ลำดับที่ ${request.sequenceInYear} จาก 3 เรื่องในปี ${request.calendarYear}`
+              ? `ใช้สิทธิ์ลำดับที่ ${request.sequenceInYear} จาก 3 เรื่องของปีที่ยื่น ${
+                  request.entitlementYear ?? request.calendarYear
+                }`
               : 'ยังไม่ได้ตัดสิทธิ์ประจำปี (ตัดเมื่ออนุมัติ)'}
           </span>
         </div>
@@ -336,9 +338,10 @@ export function RequestDetailPage() {
         <Card className="mb-5 no-print" title="การเบิกจ่าย">
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-slate-600">
-              อนุมัติแล้ว {formatMoney(request.amountApproved)} รอบันทึกการจ่ายจริง
+              อนุมัติแล้ว {formatMoney(request.amountApproved)} · บันทึกผลการเบิกจ่ายได้เมื่อตั้งเบิกที่กองคลังเสร็จ
+              ไม่ใช่ขั้นบังคับ
             </p>
-            <Button onClick={() => setDialog('pay')}>บันทึกจ่ายจริง</Button>
+            <Button onClick={() => setDialog('pay')}>บันทึกผลการเบิกจ่าย</Button>
           </div>
         </Card>
       )}
@@ -403,9 +406,9 @@ export function RequestDetailPage() {
           <Card title="คำรับรองของผู้ขอ">
             <ul className="space-y-2 text-sm">
               {[
-                { ok: request.certNotOnStudyLeave, text: 'ไม่อยู่ระหว่างลาศึกษาต่อเต็มเวลา' },
+                { ok: request.certNotOnStudyLeave, text: 'บทความไม่ได้เกิดขึ้นขณะอยู่ระหว่างการศึกษาต่อ' },
                 { ok: request.certNotThesisPart, text: 'บทความไม่เป็นส่วนหนึ่งของวิทยานิพนธ์' },
-                { ok: request.certNotDuplicate, text: 'ยังไม่เคยได้รับค่าตอบแทนบทความนี้' },
+                { ok: request.certNotDuplicate, text: 'ยังไม่เคยได้รับค่าตอบแทนหรือรางวัลสนับสนุนการตีพิมพ์' },
               ].map((item) => (
                 <li key={item.text} className="flex items-start gap-2">
                   <span className={item.ok ? 'text-emerald-600' : 'text-slate-300'}>
@@ -827,7 +830,7 @@ export function RequestDetailPage() {
       <Modal
         open={dialog === 'pay'}
         onClose={closeDialog}
-        title="บันทึกการจ่ายจริง"
+        title="บันทึกผลการเบิกจ่าย"
         footer={
           <>
             <Button variant="outline" onClick={closeDialog}>

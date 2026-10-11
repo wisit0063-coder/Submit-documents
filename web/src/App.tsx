@@ -17,7 +17,8 @@ import { AdminUsersPage } from '@/pages/AdminUsersPage';
 import { AdminTiersPage } from '@/pages/AdminTiersPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { AdminRegistrationsPage } from '@/pages/AdminRegistrationsPage';
-import { NotFoundPage } from '@/pages/NotFoundPage';
+import { ForbiddenPage, NotFoundPage } from '@/pages/NotFoundPage';
+import { rolesForPath } from '@/lib/access';
 
 function FullPageSpinner() {
   return (
@@ -40,6 +41,18 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   if (user.mustChangePassword && location.pathname !== '/change-password') {
     return <Navigate to="/change-password" replace />;
   }
+  return children;
+}
+
+/**
+ * Role gate for a single page, reading the same map the sidebar uses. Without
+ * it a signed-in user could type any address and land on a page whose every
+ * request then failed with a permission error.
+ */
+function RequireRoles({ path, children }: { path: string; children: JSX.Element }) {
+  const { can } = useAuth();
+  const roles = rolesForPath(path);
+  if (roles && !can(...roles)) return <ForbiddenPage />;
   return children;
 }
 
@@ -72,16 +85,72 @@ export default function App() {
       >
         <Route path="/" element={<DashboardPage />} />
         <Route path="/requests" element={<RequestListPage />} />
-        <Route path="/requests/new" element={<RequestFormPage />} />
+        <Route
+          path="/requests/new"
+          element={
+            <RequireRoles path="/requests/new">
+              <RequestFormPage />
+            </RequireRoles>
+          }
+        />
         <Route path="/requests/:id/edit" element={<RequestFormPage />} />
         <Route path="/requests/:id" element={<RequestDetailPage />} />
-        <Route path="/inbox" element={<InboxPage />} />
-        <Route path="/payments" element={<PaymentsPage />} />
-        <Route path="/budget" element={<BudgetPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/admin/users" element={<AdminUsersPage />} />
-        <Route path="/admin/journal-tiers" element={<AdminTiersPage />} />
-        <Route path="/admin/registrations" element={<AdminRegistrationsPage />} />
+        <Route
+          path="/inbox"
+          element={
+            <RequireRoles path="/inbox">
+              <InboxPage />
+            </RequireRoles>
+          }
+        />
+        <Route
+          path="/payments"
+          element={
+            <RequireRoles path="/payments">
+              <PaymentsPage />
+            </RequireRoles>
+          }
+        />
+        <Route
+          path="/budget"
+          element={
+            <RequireRoles path="/budget">
+              <BudgetPage />
+            </RequireRoles>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <RequireRoles path="/reports">
+              <ReportsPage />
+            </RequireRoles>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <RequireRoles path="/admin/users">
+              <AdminUsersPage />
+            </RequireRoles>
+          }
+        />
+        <Route
+          path="/admin/journal-tiers"
+          element={
+            <RequireRoles path="/admin/journal-tiers">
+              <AdminTiersPage />
+            </RequireRoles>
+          }
+        />
+        <Route
+          path="/admin/registrations"
+          element={
+            <RequireRoles path="/admin/registrations">
+              <AdminRegistrationsPage />
+            </RequireRoles>
+          }
+        />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

@@ -55,6 +55,7 @@ export function PaymentsPage() {
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [showApproved, setShowApproved] = useState(false);
 
   const { data, isLoading, isError, error: loadError, refetch } = useQuery({
     queryKey: ['payments'],
@@ -77,7 +78,7 @@ export function PaymentsPage() {
       api.post(`/requests/${requestId}/pay`, { voucherNo, paidAt, note: note || undefined }),
     onSuccess: async () => {
       await invalidate();
-      toast.push('success', 'บันทึกการจ่ายเรียบร้อยแล้ว');
+      toast.push('success', 'บันทึกผลการเบิกจ่ายเรียบร้อยแล้ว');
       setPayTarget(null);
       setVoucherNo('');
       setNote('');
@@ -112,7 +113,7 @@ export function PaymentsPage() {
     <>
       <PageHeader
         title="การเบิกจ่าย"
-        description="คำขอที่อนุมัติแล้วรอโอนเงิน และประวัติการจ่ายจริง"
+        description="บันทึกผลการเบิกจ่ายที่กองคลังดำเนินการแล้ว ระบบไม่ได้จ่ายเงินเอง · เรื่องถือว่าจบตั้งแต่อนุมัติ การบันทึกที่นี่เป็นทางเลือก"
       />
 
       {budget && (
@@ -144,20 +145,34 @@ export function PaymentsPage() {
         </div>
       )}
 
+      {/* Folded away by default. Nobody at the university owns the job of
+          recording the bursar's outcome, so an open "waiting to be paid" queue
+          would only ever look like a backlog nobody is clearing. A claim is
+          finished once it is approved; this list is here for the day someone
+          does take the job on. */}
       <Card
-        title="รอเบิกจ่าย"
-        description={`${data?.pending.length ?? 0} รายการ รวม ${formatMoney(pendingTotal)}`}
+        title="คำขอที่อนุมัติแล้ว"
+        description={
+          showApproved
+            ? `${data?.pending.length ?? 0} รายการ รวม ${formatMoney(pendingTotal)} · ยังไม่ได้บันทึกผลการเบิกจ่าย ซึ่งไม่ใช่ขั้นตอนบังคับ`
+            : 'เปิดดูได้เมื่อต้องการบันทึกเลขที่ฎีกากลับเข้าระบบ ไม่ใช่คิวงานที่ต้องเคลียร์'
+        }
         className="mb-5"
-        bodyClassName="p-5 pt-4"
+        bodyClassName={showApproved ? 'p-5 pt-4' : 'hidden'}
+        action={
+          <Button size="sm" variant="outline" onClick={() => setShowApproved((value) => !value)}>
+            {showApproved ? 'ซ่อนรายการ' : 'แสดงรายการ'}
+          </Button>
+        }
       >
-        {isLoading ? (
+        {!showApproved ? null : isLoading ? (
           <div className="flex justify-center py-10">
             <Spinner className="h-6 w-6 text-brand-600" />
           </div>
         ) : isError ? (
           <ErrorState error={loadError} onRetry={() => void refetch()} />
         ) : !data || data.pending.length === 0 ? (
-          <EmptyState title="ไม่มีรายการรอเบิกจ่าย" />
+          <EmptyState title="ไม่มีคำขอที่รอการบันทึก" />
         ) : (
           <Table>
             <thead>
@@ -201,7 +216,7 @@ export function PaymentsPage() {
                           setPayTarget(request);
                         }}
                       >
-                        บันทึกจ่าย
+                        บันทึกผลเบิกจ่าย
                       </Button>
                     )}
                   </Td>
@@ -284,18 +299,14 @@ export function PaymentsPage() {
       <Modal
         open={Boolean(payTarget)}
         onClose={() => setPayTarget(null)}
-        title="บันทึกการจ่ายจริง"
+        title="บันทึกผลการเบิกจ่าย"
         footer={
           <>
             <Button variant="outline" onClick={() => setPayTarget(null)}>
               ยกเลิก
             </Button>
-            <Button
-              loading={pay.isPending}
-              disabled={!voucherNo.trim()}
-              onClick={() => payTarget && pay.mutate(payTarget.id)}
-            >
-              บันทึกการจ่าย
+            <Button loading={pay.isPending} onClick={() => payTarget && pay.mutate(payTarget.id)}>
+              บันทึก
             </Button>
           </>
         }
@@ -307,7 +318,10 @@ export function PaymentsPage() {
               {formatMoney(payTarget.amountApproved)}
             </p>
             {error && <Alert tone="error">{error}</Alert>}
-            <Field label="เลขที่ฎีกา" required>
+            <Field
+              label="เลขที่ฎีกา"
+              hint="ไม่บังคับ ถ้ายังไม่ได้รับเลขจากกองคลัง เว้นว่างไว้แล้วบันทึกเพิ่มภายหลังได้"
+            >
               <Input value={voucherNo} onChange={(event) => setVoucherNo(event.target.value)} />
             </Field>
             <Field label="วันที่จ่าย" required>

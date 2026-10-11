@@ -13,6 +13,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
+import { claimableYears } from '@/lib/years';
 import { axisProps, gridProps, moneyTick, SERIES, tooltipStyle } from '@/lib/chart';
 import {
   Button,
@@ -72,15 +73,17 @@ interface QaRow {
 
 type TabKey = 'faculty' | 'tier' | 'processing' | 'qa';
 
-const currentYear = new Date().getFullYear();
-const YEARS = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3];
+const YEARS = claimableYears();
 
 /** Shortens a faculty name so the y-axis stays readable. */
 const shortName = (name: string) => name.replace('คณะ', '').replace('มหาวิทยาลัย', '').trim();
 
 export function ReportsPage() {
   const { can } = useAuth();
-  const [tab, setTab] = useState<TabKey>(can('ADMIN', 'FINANCE', 'APPROVER') ? 'faculty' : 'qa');
+  // A dean holds both: the faculty tab opens first because it is the wider one.
+  const canFaculty = can('ADMIN', 'FINANCE', 'APPROVER', 'RDI_OFFICER', 'DEAN', 'ACADEMIC_OFFICE');
+  const canQa = can('FACULTY_QA', 'ADMIN', 'DEAN');
+  const [tab, setTab] = useState<TabKey>(canFaculty ? 'faculty' : 'qa');
   const [year, setYear] = useState('');
   const [facultyId, setFacultyId] = useState('');
 
@@ -95,7 +98,7 @@ export function ReportsPage() {
   const byFaculty = useQuery({
     queryKey: ['report-faculty', filters],
     queryFn: () => api.get<FacultyRow[]>('/reports/by-faculty', filters),
-    enabled: tab === 'faculty' && can('ADMIN', 'FINANCE', 'APPROVER'),
+    enabled: tab === 'faculty' && canFaculty,
   });
 
   const byTier = useQuery({
@@ -107,20 +110,20 @@ export function ReportsPage() {
   const processing = useQuery({
     queryKey: ['report-processing', filters],
     queryFn: () => api.get<ProcessingTime>('/reports/processing-time', filters),
-    enabled: tab === 'processing' && can('ADMIN'),
+    enabled: tab === 'processing' && can('ADMIN', 'RDI_OFFICER'),
   });
 
   const qa = useQuery({
     queryKey: ['report-qa', filters],
     queryFn: () => api.get<QaRow[]>('/reports/qa-indicator', filters),
-    enabled: tab === 'qa' && can('FACULTY_QA', 'ADMIN'),
+    enabled: tab === 'qa' && canQa,
   });
 
   const tabs: { key: TabKey; label: string; visible: boolean }[] = [
-    { key: 'faculty', label: 'รายคณะ', visible: can('ADMIN', 'FINANCE', 'APPROVER') },
+    { key: 'faculty', label: 'รายคณะ', visible: canFaculty },
     { key: 'tier', label: 'ตามฐานข้อมูลวารสาร', visible: can('ADMIN', 'FINANCE') },
-    { key: 'processing', label: 'เวลาที่ใช้แต่ละขั้น', visible: can('ADMIN') },
-    { key: 'qa', label: 'ตัวชี้วัดประกันคุณภาพ', visible: can('FACULTY_QA', 'ADMIN') },
+    { key: 'processing', label: 'เวลาที่ใช้แต่ละขั้น', visible: can('ADMIN', 'RDI_OFFICER') },
+    { key: 'qa', label: 'ตัวชี้วัดประกันคุณภาพ', visible: canQa },
   ];
 
   const exportUrl = () => {
@@ -136,7 +139,7 @@ export function ReportsPage() {
         title="รายงาน"
         description="สรุปผลการเบิกจ่ายค่าตอบแทนการตีพิมพ์ ตามคณะ ฐานข้อมูล และระยะเวลาดำเนินการ"
         action={
-          can('ADMIN', 'FINANCE') && (
+          can('ADMIN', 'FINANCE', 'FACULTY_QA') && (
             <a href={exportUrl()} target="_blank" rel="noreferrer">
               <Button variant="outline">ส่งออก Excel</Button>
             </a>

@@ -3,15 +3,14 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth, REVIEWER_ROLES } from '@/lib/auth';
+import { rolesForPath } from '@/lib/access';
 import { ROLE_LABELS } from '@/lib/format';
 import { Badge, Button, cn } from '@/components/ui';
-import type { RoleCode } from '@/types';
 
 interface NavItem {
   to: string;
   label: string;
   icon: ReactNode;
-  roles?: RoleCode[];
   badge?: 'inbox' | 'registrations';
 }
 
@@ -21,53 +20,32 @@ const icon = (path: string) => (
   </svg>
 );
 
+// Who may see each item comes from PAGE_ROLES, the same map the router gates
+// with, so a menu entry can never point at a page the user is bounced from.
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'ภาพรวม', icon: icon('M3 12l9-9 9 9M5 10v10h14V10') },
-  { to: '/requests', label: 'คำขอของฉัน', icon: icon('M8 3h8l4 4v14H4V3h4zM8 3v4h8V3M8 12h8M8 16h5') },
+  { to: '/requests', label: 'คำขอ', icon: icon('M8 3h8l4 4v14H4V3h4zM8 3v4h8V3M8 12h8M8 16h5') },
   {
     to: '/inbox',
     label: 'คิวงานของฉัน',
     icon: icon('M3 12h5l2 3h4l2-3h5M3 12l2-7h14l2 7v7H3v-7z'),
-    roles: REVIEWER_ROLES,
     badge: 'inbox',
   },
-  {
-    to: '/payments',
-    label: 'การเบิกจ่าย',
-    icon: icon('M3 7h18v11H3V7zm0 4h18M7 15h4'),
-    roles: ['FINANCE', 'ADMIN'],
-  },
-  {
-    to: '/budget',
-    label: 'งบประมาณ',
-    icon: icon('M12 3v18M7 7h10M5 12h14M7 17h10'),
-    roles: ['FINANCE', 'ADMIN', 'APPROVER'],
-  },
-  {
-    to: '/reports',
-    label: 'รายงาน',
-    icon: icon('M4 20V10M10 20V4M16 20v-7M22 20H2'),
-    roles: ['ADMIN', 'FINANCE', 'APPROVER', 'FACULTY_QA'],
-  },
+  { to: '/payments', label: 'การเบิกจ่าย', icon: icon('M3 7h18v11H3V7zm0 4h18M7 15h4') },
+  { to: '/budget', label: 'งบประมาณ', icon: icon('M12 3v18M7 7h10M5 12h14M7 17h10') },
+  { to: '/reports', label: 'รายงาน', icon: icon('M4 20V10M10 20V4M16 20v-7M22 20H2') },
   {
     to: '/admin/registrations',
     label: 'ใบสมัครสมาชิก',
     icon: icon('M15 19v-1a4 4 0 0 0-8 0v1M11 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 8v6M22 11h-6'),
-    roles: ['ADMIN'],
     badge: 'registrations',
   },
   {
     to: '/admin/users',
     label: 'ผู้ใช้งาน',
     icon: icon('M16 20v-2a4 4 0 0 0-8 0v2M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'),
-    roles: ['ADMIN'],
   },
-  {
-    to: '/admin/journal-tiers',
-    label: 'อัตราค่าตอบแทน',
-    icon: icon('M4 6h16M4 12h16M4 18h10'),
-    roles: ['ADMIN'],
-  },
+  { to: '/admin/journal-tiers', label: 'อัตราค่าตอบแทน', icon: icon('M4 6h16M4 12h16M4 18h10') },
 ];
 
 export function AppLayout() {
@@ -95,7 +73,16 @@ export function AppLayout() {
         ? (registrationCount?.count ?? 0)
         : 0;
 
-  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || can(...item.roles));
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    const roles = rolesForPath(item.to);
+    return !roles || can(...roles);
+  });
+
+  // A reviewer opening "คำขอ" gets every submitted claim, not their own, so the
+  // label only says "ของฉัน" for someone who really does see only their own.
+  const isPlainRequester = !can(...REVIEWER_ROLES, 'FINANCE', 'ADMIN') && can('RESEARCHER');
+  const labelFor = (item: NavItem) =>
+    item.to === '/requests' && isPlainRequester ? 'คำขอของฉัน' : item.label;
 
   const handleLogout = async () => {
     await logout();
@@ -172,7 +159,7 @@ export function AppLayout() {
                 }
               >
                 <span className="shrink-0 text-current">{item.icon}</span>
-                <span className="flex-1">{item.label}</span>
+                <span className="flex-1">{labelFor(item)}</span>
                 {badgeCount(item.badge) > 0 && (
                   <Badge className="bg-rose-100 text-rose-700 ring-rose-200">
                     {badgeCount(item.badge)}

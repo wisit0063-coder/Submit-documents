@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { DOC_TYPE_LABELS, REQUIRED_DOC_TYPES, formatMoney, toDateInput } from '@/lib/format';
 import {
   Alert,
@@ -17,6 +18,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { AttachmentPanel } from '@/components/AttachmentPanel';
+import { ForbiddenPage } from '@/pages/NotFoundPage';
 import type { JournalTier, RequestDetail } from '@/types';
 
 interface FormState {
@@ -58,6 +60,7 @@ export function RequestFormPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const isEdit = Boolean(id);
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -182,6 +185,14 @@ export function RequestFormPage() {
         <Spinner className="h-7 w-7 text-brand-600" />
       </div>
     );
+  }
+
+  // Editing belongs to the claimant alone, which the server enforces on save.
+  // The detail endpoint answers reviewers as well, though, so without this a
+  // reviewer who typed the address got a filled-in form of somebody else's
+  // claim and learnt it was not theirs only when saving failed.
+  if (isEdit && existing && user && existing.userId !== user.id) {
+    return <ForbiddenPage />;
   }
 
   const locked = isEdit && existing && !['DRAFT', 'RETURNED'].includes(existing.status);
@@ -384,7 +395,7 @@ export function RequestFormPage() {
               checked={form.certNotOnStudyLeave}
               onChange={(e) => set('certNotOnStudyLeave', e.target.checked)}
               disabled={locked}
-              label="ข้าพเจ้าไม่อยู่ระหว่างลาศึกษาต่อเต็มเวลา"
+              label="บทความนี้ไม่ได้เกิดขึ้นขณะข้าพเจ้าอยู่ระหว่างการศึกษาต่อ แม้ไม่เกี่ยวกับวิทยานิพนธ์"
             />
             <Checkbox
               checked={form.certNotThesisPart}
@@ -396,7 +407,7 @@ export function RequestFormPage() {
               checked={form.certNotDuplicate}
               onChange={(e) => set('certNotDuplicate', e.target.checked)}
               disabled={locked}
-              label="บทความนี้ยังไม่เคยได้รับค่าตอบแทนการตีพิมพ์จากมหาวิทยาลัยมาก่อน"
+              label="บทความนี้ยังไม่เคยได้รับค่าตอบแทนหรือรางวัลที่เข้าข่ายการสนับสนุนการตีพิมพ์จากมหาวิทยาลัย"
             />
           </div>
         </Card>
