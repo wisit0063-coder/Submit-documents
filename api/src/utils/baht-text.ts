@@ -19,42 +19,42 @@
  */
 
 const DIGITS = [
-  "",
-  "หนึ่ง",
-  "สอง",
-  "สาม",
-  "สี่",
-  "ห้า",
-  "หก",
-  "เจ็ด",
-  "แปด",
-  "เก้า",
+  '',
+  'หนึ่ง',
+  'สอง',
+  'สาม',
+  'สี่',
+  'ห้า',
+  'หก',
+  'เจ็ด',
+  'แปด',
+  'เก้า',
 ];
-const PLACES = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน"];
+const PLACES = ['', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน'];
 
 /** Reads one group of at most six digits. `hasPrefix` carries in whether a higher group spoke first, which is what turns a trailing 1 into เอ็ด. */
 function readGroup(group: number, hasPrefix: boolean): string {
-  if (group === 0) return "";
-  const digits = String(group).split("").map(Number);
-  let words = "";
+  if (group === 0) return '';
+  const digits = String(group).split('').map(Number);
+  let words = '';
 
   digits.forEach((digit, index) => {
     const place = digits.length - index - 1;
     if (digit === 0) return;
 
     if (place === 1) {
-      words += digit === 1 ? "" : digit === 2 ? "ยี่" : (DIGITS[digit] ?? "");
-      words += PLACES[place] ?? "";
+      words += digit === 1 ? '' : digit === 2 ? 'ยี่' : (DIGITS[digit] ?? '');
+      words += PLACES[place] ?? '';
       return;
     }
 
     const isLoneUnit = place === 0 && !hasPrefix && digits.length === 1;
     if (place === 0 && digit === 1 && !isLoneUnit) {
-      words += "เอ็ด";
+      words += 'เอ็ด';
       return;
     }
 
-    words += (DIGITS[digit] ?? "") + (PLACES[place] ?? "");
+    words += (DIGITS[digit] ?? '') + (PLACES[place] ?? '');
   });
 
   return words;
@@ -62,7 +62,7 @@ function readGroup(group: number, hasPrefix: boolean): string {
 
 /** Reads a whole number, splitting it into the six-digit groups Thai counts by. */
 function readInteger(value: number): string {
-  if (value === 0) return "ศูนย์";
+  if (value === 0) return 'ศูนย์';
 
   const groups: number[] = [];
   let rest = value;
@@ -75,8 +75,8 @@ function readInteger(value: number): string {
     const isLast = index === groups.length - 1;
     // A middle group of zeros still owes its ล้าน: 1,000,000,000 is "หนึ่งพันล้าน".
     const spoken = readGroup(group, words.length > 0);
-    return words + spoken + (isLast ? "" : "ล้าน");
-  }, "");
+    return words + spoken + (isLast ? '' : 'ล้าน');
+  }, '');
 }
 
 /**
@@ -86,7 +86,7 @@ function readInteger(value: number): string {
  */
 export function bahtText(amount: number | string): string {
   const value = typeof amount === "string" ? Number(amount) : amount;
-  if (!Number.isFinite(value)) throw new Error("จำนวนเงินไม่ถูกต้อง");
+  if (!Number.isFinite(value)) throw new Error('จำนวนเงินไม่ถูกต้อง');
 
   const negative = value < 0;
   // Round first: 0.005 would otherwise read as zero satang while the digits
@@ -98,7 +98,7 @@ export function bahtText(amount: number | string): string {
   const words =
     satang === 0
       ? `${readInteger(baht)}บาทถ้วน`
-      : `${baht === 0 ? "" : `${readInteger(baht)}บาท`}${readGroup(satang, false)}สตางค์`;
+      : `${baht === 0 ? '' : `${readInteger(baht)}บาท`}${readGroup(satang, false)}สตางค์`;
 
   return negative ? `ลบ${words}` : words;
 }

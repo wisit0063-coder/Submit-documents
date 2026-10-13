@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, ApiError } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import {
   formatDate,
   formatDateTime,
@@ -14,7 +14,7 @@ import {
   STEP_LABELS,
   thaiYear,
   WORKFLOW_ORDER,
-} from "@/lib/format";
+} from '@/lib/format';
 import {
   Alert,
   Badge,
@@ -29,46 +29,32 @@ import {
   Textarea,
   useToast,
   cn,
-} from "@/components/ui";
-import { AttachmentPanel } from "@/components/AttachmentPanel";
-import type { RequestDetail, RequestStatus, TimelineEntry } from "@/types";
+} from '@/components/ui';
+import { AttachmentPanel } from '@/components/AttachmentPanel';
+import type { RequestDetail, RequestStatus, TimelineEntry } from '@/types';
 
 /** Which role owns each review status - mirrors config/workflow.ts on the server. */
 const STEP_OWNER: Partial<Record<RequestStatus, string>> = {
-  FACULTY_REVIEW: "FACULTY_QA",
-  DEAN_REVIEW: "DEAN",
-  RDI_REVIEW: "RDI_OFFICER",
-  ACADEMIC_OFFICE_REVIEW: "ACADEMIC_OFFICE",
-  COMMITTEE_REVIEW: "RDI_OFFICER",
-  PENDING_APPROVAL: "APPROVER",
+  FACULTY_REVIEW: 'FACULTY_QA',
+  DEAN_REVIEW: 'DEAN',
+  RDI_REVIEW: 'RDI_OFFICER',
+  ACADEMIC_OFFICE_REVIEW: 'ACADEMIC_OFFICE',
+  COMMITTEE_REVIEW: 'RDI_OFFICER',
+  PENDING_APPROVAL: 'APPROVER',
 };
 
-function DetailRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-3 gap-3 py-1.5 text-sm sm:grid-cols-4">
       <dt className="col-span-1 text-slate-500">{label}</dt>
-      <dd className="col-span-2 text-slate-900 sm:col-span-3">
-        {children ?? "-"}
-      </dd>
+      <dd className="col-span-2 text-slate-900 sm:col-span-3">{children ?? '-'}</dd>
     </div>
   );
 }
 
 /** Horizontal rail of the happy path, with the current step marked. */
 function ProgressRail({ status }: { status: RequestStatus }) {
-  const offPath = [
-    "RETURNED",
-    "REJECTED",
-    "CANCELLED",
-    "REFUNDED",
-    "COMMITTEE_REVIEW",
-  ].includes(status);
+  const offPath = ['RETURNED', 'REJECTED', 'CANCELLED', 'REFUNDED', 'COMMITTEE_REVIEW'].includes(status);
   const currentIndex = WORKFLOW_ORDER.indexOf(status);
 
   return (
@@ -80,31 +66,22 @@ function ProgressRail({ status }: { status: RequestStatus }) {
           <div key={step} className="flex items-center gap-1">
             <span
               className={cn(
-                "rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
-                current && "bg-brand-600 text-white ring-brand-600",
-                done && "bg-brand-50 text-brand-700 ring-brand-200",
-                !current &&
-                  !done &&
-                  "bg-slate-50 text-slate-400 ring-slate-200",
+                'rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset',
+                current && 'bg-brand-600 text-white ring-brand-600',
+                done && 'bg-brand-50 text-brand-700 ring-brand-200',
+                !current && !done && 'bg-slate-50 text-slate-400 ring-slate-200',
               )}
             >
               {STATUS_LABELS[step]}
             </span>
             {index < WORKFLOW_ORDER.length - 1 && (
-              <span
-                className={cn(
-                  "h-px w-3",
-                  done ? "bg-brand-300" : "bg-slate-200",
-                )}
-              />
+              <span className={cn('h-px w-3', done ? 'bg-brand-300' : 'bg-slate-200')} />
             )}
           </div>
         );
       })}
       {offPath && (
-        <Badge className={cn("ml-2", STATUS_TONE[status])}>
-          {STATUS_LABELS[status]}
-        </Badge>
+        <Badge className={cn('ml-2', STATUS_TONE[status])}>{STATUS_LABELS[status]}</Badge>
       )}
     </div>
   );
@@ -119,21 +96,21 @@ export function RequestDetailPage() {
 
   const [dialog, setDialog] = useState<
     | null
-    | "submit"
-    | "approve"
-    | "return"
-    | "reject"
-    | "final"
-    | "committee"
-    | "pay"
-    | "cancel"
-    | "qa-year"
+    | 'submit'
+    | 'approve'
+    | 'return'
+    | 'reject'
+    | 'final'
+    | 'committee'
+    | 'pay'
+    | 'cancel'
+    | 'qa-year'
   >(null);
-  const [qaYear, setQaYear] = useState("");
-  const [comment, setComment] = useState("");
-  const [missingDocuments, setMissingDocuments] = useState("");
-  const [amountApproved, setAmountApproved] = useState("");
-  const [voucherNo, setVoucherNo] = useState("");
+  const [qaYear, setQaYear] = useState('');
+  const [comment, setComment] = useState('');
+  const [missingDocuments, setMissingDocuments] = useState('');
+  const [amountApproved, setAmountApproved] = useState('');
+  const [voucherNo, setVoucherNo] = useState('');
   const [paidAt, setPaidAt] = useState(new Date().toISOString().slice(0, 10));
   const [isFirstAuthor, setIsFirstAuthor] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -146,13 +123,13 @@ export function RequestDetailPage() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["request", id],
+    queryKey: ['request', id],
     queryFn: () => api.get<RequestDetail>(`/requests/${id}`),
     enabled: Boolean(id),
   });
 
   const { data: timeline } = useQuery({
-    queryKey: ["timeline", id],
+    queryKey: ['timeline', id],
     queryFn: () => api.get<TimelineEntry[]>(`/requests/${id}/timeline`),
     enabled: Boolean(id),
   });
@@ -161,18 +138,18 @@ export function RequestDetailPage() {
     setDialog(null);
     setActionError(null);
     setIssues([]);
-    setComment("");
-    setMissingDocuments("");
+    setComment('');
+    setMissingDocuments('');
   };
 
   const afterAction = async (message: string) => {
-    await queryClient.invalidateQueries({ queryKey: ["request", id] });
-    await queryClient.invalidateQueries({ queryKey: ["timeline", id] });
-    await queryClient.invalidateQueries({ queryKey: ["inbox"] });
-    await queryClient.invalidateQueries({ queryKey: ["inbox-count"] });
-    await queryClient.invalidateQueries({ queryKey: ["requests"] });
-    await queryClient.invalidateQueries({ queryKey: ["session"] });
-    toast.push("success", message);
+    await queryClient.invalidateQueries({ queryKey: ['request', id] });
+    await queryClient.invalidateQueries({ queryKey: ['timeline', id] });
+    await queryClient.invalidateQueries({ queryKey: ['inbox'] });
+    await queryClient.invalidateQueries({ queryKey: ['inbox-count'] });
+    await queryClient.invalidateQueries({ queryKey: ['requests'] });
+    await queryClient.invalidateQueries({ queryKey: ['session'] });
+    toast.push('success', message);
     closeDialog();
   };
 
@@ -181,7 +158,7 @@ export function RequestDetailPage() {
       setActionError(caught.message);
       setIssues(caught.issues);
     } else {
-      setActionError("ดำเนินการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      setActionError('ดำเนินการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
     }
   };
 
@@ -189,11 +166,10 @@ export function RequestDetailPage() {
     mutationFn: async (variables: {
       path: string;
       body?: unknown;
-      method?: "post" | "patch" | "delete";
+      method?: 'post' | 'patch' | 'delete';
     }) => {
-      if (variables.method === "delete") return api.delete(variables.path);
-      if (variables.method === "patch")
-        return api.patch(variables.path, variables.body);
+      if (variables.method === 'delete') return api.delete(variables.path);
+      if (variables.method === 'patch') return api.patch(variables.path, variables.body);
       return api.post(variables.path, variables.body);
     },
     onError: handleError,
@@ -206,10 +182,7 @@ export function RequestDetailPage() {
       <div className="py-10">
         <ErrorState error={error} onRetry={() => void refetch()} />
         <div className="mt-4 text-center">
-          <Link
-            to="/requests"
-            className="text-sm text-brand-700 hover:underline"
-          >
+          <Link to="/requests" className="text-sm text-brand-700 hover:underline">
             กลับไปหน้ารายการคำขอ
           </Link>
         </div>
@@ -229,48 +202,35 @@ export function RequestDetailPage() {
   const stepRole = STEP_OWNER[request.status];
   // Nobody reviews their own request, at any step.
   const canReview = Boolean(stepRole && !isOwner && can(stepRole as never));
-  const canEditDraft =
-    isOwner && ["DRAFT", "RETURNED"].includes(request.status);
+  const canEditDraft = isOwner && ['DRAFT', 'RETURNED'].includes(request.status);
   const canCancel =
     isOwner &&
-    [
-      "DRAFT",
-      "FACULTY_REVIEW",
-      "DEAN_REVIEW",
-      "RDI_REVIEW",
-      "ACADEMIC_OFFICE_REVIEW",
-      "COMMITTEE_REVIEW",
-      "RETURNED",
-    ].includes(request.status);
-  const canPay = can("FINANCE") && request.status === "APPROVED";
+    ['DRAFT', 'FACULTY_REVIEW', 'DEAN_REVIEW', 'RDI_REVIEW', 'ACADEMIC_OFFICE_REVIEW', 'COMMITTEE_REVIEW', 'RETURNED'].includes(
+      request.status,
+    );
+  const canPay = can('FINANCE') && request.status === 'APPROVED';
 
   // Mirrors setQaIndicatorYear on the server - FACULTY_QA of this request's
   // faculty (or one granted without a faculty), or ADMIN. The server checks
   // again; this only decides whether to offer the button. Any status after
   // submission, because the QA return is usually compiled once claims are paid.
   const canSetQaYear =
-    request.status !== "DRAFT" &&
-    (can("ADMIN") ||
+    request.status !== 'DRAFT' &&
+    (can('ADMIN') ||
       (user?.roleScopes ?? []).some(
         (scope) =>
-          scope.roleCode === "FACULTY_QA" &&
+          scope.roleCode === 'FACULTY_QA' &&
           (scope.facultyId === null || scope.facultyId === request.facultyId),
       ));
 
   /** QA rounds are counted in พ.ศ.; default to the year the article was published. */
-  const defaultQaYear = String(
-    request.qaIndicatorYear ?? thaiYear(request.calendarYear),
-  );
+  const defaultQaYear = String(request.qaIndicatorYear ?? thaiYear(request.calendarYear));
 
   const lastReturn = [...(request.approvals ?? [])]
     .reverse()
-    .find((approval) => approval.decision === "RETURNED");
+    .find((approval) => approval.decision === 'RETURNED');
 
-  const run = (
-    path: string,
-    body?: unknown,
-    message = "ดำเนินการเรียบร้อยแล้ว",
-  ) =>
+  const run = (path: string, body?: unknown, message = 'ดำเนินการเรียบร้อยแล้ว') =>
     action.mutate(
       { path, body },
       { onSuccess: () => void afterAction(message) },
@@ -280,18 +240,14 @@ export function RequestDetailPage() {
     <>
       <PageHeader
         title={request.requestNo}
-        description={`ยื่นเมื่อ ${formatDateTime(request.submittedAt)} · ปีปฏิทิน ${thaiYear(request.calendarYear)}`}
+        description={`ยื่นเมื่อ ${formatDateTime(request.submittedAt) } · ปีปฏิทิน ${thaiYear(request.calendarYear)}`}
         action={
           <div className="flex flex-wrap gap-2 no-print">
-            <a
-              href={api.fileUrl(`/requests/${request.id}/document`)}
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a href={api.fileUrl(`/requests/${request.id}/document`)} target="_blank" rel="noreferrer">
               <Button variant="outline">พิมพ์บันทึกข้อความ (PDF)</Button>
             </a>
-            {/* The voucher is what the claimant signs for the money, so it only
-                exists once an amount has been approved. */}
+            {/* The voucher is what the claimant signs for the money, so it
+                only exists once an amount has been approved. */}
             {request.amountApproved !== null && (
               <a
                 href={api.fileUrl(`/requests/${request.id}/receipt`)}
@@ -306,13 +262,11 @@ export function RequestDetailPage() {
                 <Button variant="outline">แก้ไข</Button>
               </Link>
             )}
-            {isOwner && request.status === "DRAFT" && (
-              <Button onClick={() => setDialog("submit")}>ส่งคำขอ</Button>
+            {isOwner && request.status === 'DRAFT' && (
+              <Button onClick={() => setDialog('submit')}>ส่งคำขอ</Button>
             )}
-            {isOwner && request.status === "RETURNED" && (
-              <Button onClick={() => setDialog("submit")}>
-                ส่งกลับเข้าพิจารณา
-              </Button>
+            {isOwner && request.status === 'RETURNED' && (
+              <Button onClick={() => setDialog('submit')}>ส่งกลับเข้าพิจารณา</Button>
             )}
           </div>
         }
@@ -320,7 +274,7 @@ export function RequestDetailPage() {
 
       <Card className="mb-5" bodyClassName="p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Badge className={cn("text-sm", STATUS_TONE[request.status])}>
+          <Badge className={cn('text-sm', STATUS_TONE[request.status])}>
             {STATUS_LABELS[request.status]}
           </Badge>
           <span className="text-sm text-slate-500">
@@ -328,7 +282,7 @@ export function RequestDetailPage() {
               ? `ใช้สิทธิ์ลำดับที่ ${request.sequenceInYear} จาก 3 เรื่องของปีที่ยื่น ${thaiYear(
                   request.entitlementYear ?? request.calendarYear,
                 )}`
-              : "ยังไม่ได้ตัดสิทธิ์ประจำปี (ตัดเมื่ออนุมัติ)"}
+              : 'ยังไม่ได้ตัดสิทธิ์ประจำปี (ตัดเมื่ออนุมัติ)'}
           </span>
         </div>
         <div className="mt-3">
@@ -336,47 +290,37 @@ export function RequestDetailPage() {
         </div>
       </Card>
 
-      {request.status === "RETURNED" && lastReturn && (
+      {request.status === 'RETURNED' && lastReturn && (
         <div className="mb-5">
           <Alert tone="warning" title="คำขอถูกตีกลับให้แก้ไข">
             <p>
-              จากขั้น {STEP_LABELS[lastReturn.stepCode] ?? lastReturn.stepCode}{" "}
-              โดย {signerName(lastReturn)} เมื่อ{" "}
-              {formatDateTime(lastReturn.signedAt)}
+              จากขั้น {STEP_LABELS[lastReturn.stepCode] ?? lastReturn.stepCode} โดย{' '}
+              {signerName(lastReturn)} เมื่อ {formatDateTime(lastReturn.signedAt)}
             </p>
-            <p className="mt-1 font-medium">
-              สิ่งที่ต้องแก้ไข: {lastReturn.missingDocuments}
-            </p>
-            {lastReturn.comment && (
-              <p className="mt-1">ความเห็นเพิ่มเติม: {lastReturn.comment}</p>
-            )}
+            <p className="mt-1 font-medium">สิ่งที่ต้องแก้ไข: {lastReturn.missingDocuments}</p>
+            {lastReturn.comment && <p className="mt-1">ความเห็นเพิ่มเติม: {lastReturn.comment}</p>}
             <p className="mt-2 text-xs">
-              เมื่อแก้ไขแล้วกดส่งกลับ ระบบจะส่งเรื่องกลับเข้าขั้นที่ตีกลับ
-              ไม่ต้องเริ่มกระบวนการใหม่
+              เมื่อแก้ไขแล้วกดส่งกลับ ระบบจะส่งเรื่องกลับเข้าขั้นที่ตีกลับ ไม่ต้องเริ่มกระบวนการใหม่
             </p>
           </Alert>
         </div>
       )}
 
       {canReview && (
-        <Card
-          className="mb-5 no-print"
-          title="การพิจารณาของคุณ"
-          description={`ขั้นตอน: ${STATUS_LABELS[request.status]}`}
-        >
+        <Card className="mb-5 no-print" title="การพิจารณาของคุณ" description={`ขั้นตอน: ${STATUS_LABELS[request.status]}`}>
           <div className="flex flex-wrap gap-2">
-            {request.status === "PENDING_APPROVAL" ? (
+            {request.status === 'PENDING_APPROVAL' ? (
               <>
                 <Button
                   variant="success"
                   onClick={() => {
                     setAmountApproved(String(request.amountRequested));
-                    setDialog("final");
+                    setDialog('final');
                   }}
                 >
                   อนุมัติและระบุจำนวนเงิน
                 </Button>
-                <Button variant="danger" onClick={() => setDialog("reject")}>
+                <Button variant="danger" onClick={() => setDialog('reject')}>
                   ไม่อนุมัติ
                 </Button>
               </>
@@ -385,17 +329,17 @@ export function RequestDetailPage() {
                 variant="success"
                 onClick={() => {
                   setQaYear(defaultQaYear);
-                  setDialog("approve");
+                  setDialog('approve');
                 }}
               >
                 เห็นชอบ ส่งต่อขั้นถัดไป
               </Button>
             )}
-            <Button variant="outline" onClick={() => setDialog("return")}>
+            <Button variant="outline" onClick={() => setDialog('return')}>
               ตีกลับให้แก้ไข
             </Button>
-            {request.status === "RDI_REVIEW" && (
-              <Button variant="outline" onClick={() => setDialog("committee")}>
+            {request.status === 'RDI_REVIEW' && (
+              <Button variant="outline" onClick={() => setDialog('committee')}>
                 ส่งเข้าคณะกรรมการ
               </Button>
             )}
@@ -407,13 +351,10 @@ export function RequestDetailPage() {
         <Card className="mb-5 no-print" title="การเบิกจ่าย">
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-slate-600">
-              อนุมัติแล้ว {formatMoney(request.amountApproved)} ·
-              บันทึกผลการเบิกจ่ายได้เมื่อตั้งเบิกที่กองคลังเสร็จ
+              อนุมัติแล้ว {formatMoney(request.amountApproved)} · บันทึกผลการเบิกจ่ายได้เมื่อตั้งเบิกที่กองคลังเสร็จ
               ไม่ใช่ขั้นบังคับ
             </p>
-            <Button onClick={() => setDialog("pay")}>
-              บันทึกผลการเบิกจ่าย
-            </Button>
+            <Button onClick={() => setDialog('pay')}>บันทึกผลการเบิกจ่าย</Button>
           </div>
         </Card>
       )}
@@ -425,11 +366,9 @@ export function RequestDetailPage() {
               <DetailRow label="ชื่อบทความ">{request.articleTitle}</DetailRow>
               <DetailRow label="วารสาร">{request.journalName}</DetailRow>
               <DetailRow label="ปีที่ / ฉบับ / หน้า">
-                {[request.volume, request.issue, request.pages]
-                  .filter(Boolean)
-                  .join(" / ") || "-"}
+                {[request.volume, request.issue, request.pages].filter(Boolean).join(' / ') || '-'}
               </DetailRow>
-              <DetailRow label="ISSN">{request.issn || "-"}</DetailRow>
+              <DetailRow label="ISSN">{request.issn || '-'}</DetailRow>
               <DetailRow label="DOI">
                 {request.doi ? (
                   <a
@@ -441,26 +380,22 @@ export function RequestDetailPage() {
                     {request.doi}
                   </a>
                 ) : (
-                  "-"
+                  '-'
                 )}
               </DetailRow>
-              <DetailRow label="วันที่ตีพิมพ์">
-                {formatDate(request.publishedAt)}
-              </DetailRow>
+              <DetailRow label="วันที่ตีพิมพ์">{formatDate(request.publishedAt)}</DetailRow>
               <DetailRow label="ฐานข้อมูล">
                 {request.journalTier.nameTh}
-                {request.fromConference && " (คัดเลือกจาก conference)"}
+                {request.fromConference && ' (คัดเลือกจาก conference)'}
               </DetailRow>
-              <DetailRow label="ยอดที่ขอ">
-                {formatMoney(request.amountRequested)}
-              </DetailRow>
+              <DetailRow label="ยอดที่ขอ">{formatMoney(request.amountRequested)}</DetailRow>
               <DetailRow label="ยอดที่อนุมัติ">
                 {request.amountApproved !== null ? (
                   <span className="font-semibold text-emerald-700">
                     {formatMoney(request.amountApproved)}
                   </span>
                 ) : (
-                  "รอการอนุมัติ"
+                  'รอการอนุมัติ'
                 )}
               </DetailRow>
             </dl>
@@ -468,22 +403,12 @@ export function RequestDetailPage() {
 
           <Card title="ผู้ขอรับค่าตอบแทน">
             <dl className="divide-y divide-slate-100">
-              <DetailRow label="ชื่อ-สกุล">
-                {personName(request.owner)}
-              </DetailRow>
-              <DetailRow label="ตำแหน่งวิชาการ">
-                {request.owner.academicPosition || "-"}
-              </DetailRow>
+              <DetailRow label="ชื่อ-สกุล">{personName(request.owner)}</DetailRow>
+              <DetailRow label="ตำแหน่งวิชาการ">{request.owner.academicPosition || '-'}</DetailRow>
               <DetailRow label="คณะ">{request.faculty.nameTh}</DetailRow>
-              <DetailRow label="สาขาวิชา">
-                {request.departmentName ??
-                  request.owner.department?.nameTh ??
-                  "-"}
-              </DetailRow>
+              <DetailRow label="สาขาวิชา">{request.departmentName ?? request.owner.department?.nameTh ?? '-'}</DetailRow>
               <DetailRow label="ติดต่อ">
-                {[request.owner.email, request.owner.phoneMobile]
-                  .filter(Boolean)
-                  .join(" · ")}
+                {[request.owner.email, request.owner.phoneMobile].filter(Boolean).join(' · ')}
               </DetailRow>
             </dl>
             <p className="mt-3 text-xs text-slate-400">
@@ -494,36 +419,17 @@ export function RequestDetailPage() {
           <Card title="คำรับรองของผู้ขอ">
             <ul className="space-y-2 text-sm">
               {[
-                {
-                  ok: request.certNotOnStudyLeave,
-                  text: "บทความไม่ได้เกิดขึ้นขณะอยู่ระหว่างการศึกษาต่อ",
-                },
-                {
-                  ok: request.certNotThesisPart,
-                  text: "บทความไม่เป็นส่วนหนึ่งของวิทยานิพนธ์",
-                },
-                {
-                  ok: request.certNotDuplicate,
-                  text: "ยังไม่เคยได้รับค่าตอบแทนหรือรางวัลสนับสนุนการตีพิมพ์",
-                },
+                { ok: request.certNotOnStudyLeave, text: 'บทความไม่ได้เกิดขึ้นขณะอยู่ระหว่างการศึกษาต่อ' },
+                { ok: request.certNotThesisPart, text: 'บทความไม่เป็นส่วนหนึ่งของวิทยานิพนธ์' },
+                { ok: request.certNotDuplicate, text: 'ยังไม่เคยได้รับค่าตอบแทนหรือรางวัลสนับสนุนการตีพิมพ์' },
               ].map((item) => (
                 <li key={item.text} className="flex items-start gap-2">
-                  <span
-                    className={item.ok ? "text-emerald-600" : "text-slate-300"}
-                  >
-                    <svg
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      className="mt-0.5 h-4 w-4"
-                    >
+                  <span className={item.ok ? 'text-emerald-600' : 'text-slate-300'}>
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 h-4 w-4">
                       <path d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4l3.8 3.8 6.8-6.8a1 1 0 0 1 1.4 0z" />
                     </svg>
                   </span>
-                  <span
-                    className={item.ok ? "text-slate-800" : "text-slate-400"}
-                  >
-                    {item.text}
-                  </span>
+                  <span className={item.ok ? 'text-slate-800' : 'text-slate-400'}>{item.text}</span>
                 </li>
               ))}
             </ul>
@@ -535,10 +441,7 @@ export function RequestDetailPage() {
         </div>
 
         <div className="space-y-5">
-          <Card
-            title="ความคืบหน้า"
-            description="บันทึกทุกการเปลี่ยนสถานะ ใช้แทนลายเซ็นบนกระดาษ"
-          >
+          <Card title="ความคืบหน้า" description="บันทึกทุกการเปลี่ยนสถานะ ใช้แทนลายเซ็นบนกระดาษ">
             {!timeline || timeline.length === 0 ? (
               <p className="text-sm text-slate-500">ยังไม่มีประวัติ</p>
             ) : (
@@ -549,19 +452,11 @@ export function RequestDetailPage() {
                     <p className="text-sm font-medium text-slate-800">
                       {STATUS_LABELS[entry.toStatus]}
                     </p>
-                    <p className="text-xs text-slate-500">
-                      {formatDateTime(entry.createdAt)}
-                    </p>
+                    <p className="text-xs text-slate-500">{formatDateTime(entry.createdAt)}</p>
                     {entry.actor && (
-                      <p className="text-xs text-slate-500">
-                        โดย {personName(entry.actor)}
-                      </p>
+                      <p className="text-xs text-slate-500">โดย {personName(entry.actor)}</p>
                     )}
-                    {entry.note && (
-                      <p className="mt-1 text-xs text-slate-600">
-                        {entry.note}
-                      </p>
-                    )}
+                    {entry.note && <p className="mt-1 text-xs text-slate-600">{entry.note}</p>}
                   </li>
                 ))}
               </ol>
@@ -570,53 +465,44 @@ export function RequestDetailPage() {
 
           <Card title="ผลการพิจารณาแต่ละขั้น">
             {request.approvals.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                ยังไม่เข้าสู่กระบวนการพิจารณา
-              </p>
+              <p className="text-sm text-slate-500">ยังไม่เข้าสู่กระบวนการพิจารณา</p>
             ) : (
               <ul className="space-y-3">
                 {request.approvals.map((approval) => (
-                  <li
-                    key={approval.id}
-                    className="rounded-lg border border-slate-200 p-3"
-                  >
+                  <li key={approval.id} className="rounded-lg border border-slate-200 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-medium text-slate-800">
                         {STEP_LABELS[approval.stepCode] ?? approval.stepCode}
                       </p>
                       <Badge
                         className={
-                          approval.decision === "APPROVED"
-                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                            : approval.decision === "RETURNED"
-                              ? "bg-amber-50 text-amber-800 ring-amber-200"
-                              : approval.decision === "REJECTED"
-                                ? "bg-rose-50 text-rose-700 ring-rose-200"
-                                : "bg-slate-100 text-slate-600 ring-slate-200"
+                          approval.decision === 'APPROVED'
+                            ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                            : approval.decision === 'RETURNED'
+                              ? 'bg-amber-50 text-amber-800 ring-amber-200'
+                              : approval.decision === 'REJECTED'
+                                ? 'bg-rose-50 text-rose-700 ring-rose-200'
+                                : 'bg-slate-100 text-slate-600 ring-slate-200'
                         }
                       >
-                        {approval.decision === "APPROVED"
-                          ? "เห็นชอบ"
-                          : approval.decision === "RETURNED"
-                            ? "ตีกลับ"
-                            : approval.decision === "REJECTED"
-                              ? "ไม่อนุมัติ"
-                              : "รอพิจารณา"}
+                        {approval.decision === 'APPROVED'
+                          ? 'เห็นชอบ'
+                          : approval.decision === 'RETURNED'
+                            ? 'ตีกลับ'
+                            : approval.decision === 'REJECTED'
+                              ? 'ไม่อนุมัติ'
+                              : 'รอพิจารณา'}
                       </Badge>
                     </div>
                     {(approval.approverName || approval.approver) && (
                       <p className="mt-1 text-xs text-slate-600">
                         {signerName(approval)}
-                        {approval.approverPosition
-                          ? ` (${approval.approverPosition})`
-                          : ""}{" "}
-                        · {formatDateTime(approval.signedAt)}
+                        {approval.approverPosition ? ` (${approval.approverPosition})` : ''} ·{' '}
+                        {formatDateTime(approval.signedAt)}
                       </p>
                     )}
                     {approval.comment && (
-                      <p className="mt-1 text-xs text-slate-600">
-                        {approval.comment}
-                      </p>
+                      <p className="mt-1 text-xs text-slate-600">{approval.comment}</p>
                     )}
                     {approval.missingDocuments && (
                       <p className="mt-1 text-xs text-amber-700">
@@ -635,10 +521,8 @@ export function RequestDetailPage() {
                 <p className="text-sm text-slate-700">
                   {request.qaIndicatorYear !== null ? (
                     <>
-                      นับในรอบรายงาน QA ปี{" "}
-                      <span className="font-semibold">
-                        {request.qaIndicatorYear}
-                      </span>
+                      นับในรอบรายงาน QA ปี{' '}
+                      <span className="font-semibold">{request.qaIndicatorYear}</span>
                     </>
                   ) : (
                     <span className="text-slate-500">ยังไม่ได้บันทึก</span>
@@ -650,10 +534,10 @@ export function RequestDetailPage() {
                     size="sm"
                     onClick={() => {
                       setQaYear(defaultQaYear);
-                      setDialog("qa-year");
+                      setDialog('qa-year');
                     }}
                   >
-                    {request.qaIndicatorYear !== null ? "แก้ไข" : "บันทึก"}
+                    {request.qaIndicatorYear !== null ? 'แก้ไข' : 'บันทึก'}
                   </Button>
                 )}
               </div>
@@ -663,23 +547,15 @@ export function RequestDetailPage() {
           {request.payment && (
             <Card title="การเบิกจ่าย">
               <dl className="divide-y divide-slate-100">
-                <DetailRow label="เลขที่ฎีกา">
-                  {request.payment.voucherNo || "-"}
-                </DetailRow>
-                <DetailRow label="จำนวนเงิน">
-                  {formatMoney(request.payment.amount)}
-                </DetailRow>
-                <DetailRow label="วันที่จ่าย">
-                  {formatDate(request.payment.paidAt)}
-                </DetailRow>
+                <DetailRow label="เลขที่ฎีกา">{request.payment.voucherNo || '-'}</DetailRow>
+                <DetailRow label="จำนวนเงิน">{formatMoney(request.payment.amount)}</DetailRow>
+                <DetailRow label="วันที่จ่าย">{formatDate(request.payment.paidAt)}</DetailRow>
                 {request.payment.isRefunded && (
                   <>
                     <DetailRow label="เรียกเงินคืน">
                       {formatMoney(request.payment.refundAmount)}
                     </DetailRow>
-                    <DetailRow label="เหตุผล">
-                      {request.payment.refundReason}
-                    </DetailRow>
+                    <DetailRow label="เหตุผล">{request.payment.refundReason}</DetailRow>
                   </>
                 )}
               </dl>
@@ -691,7 +567,7 @@ export function RequestDetailPage() {
               <Button
                 variant="outline"
                 className="w-full text-rose-600"
-                onClick={() => setDialog("cancel")}
+                onClick={() => setDialog('cancel')}
               >
                 ยกเลิกคำขอนี้
               </Button>
@@ -706,13 +582,9 @@ export function RequestDetailPage() {
       {/* --- Dialogs ------------------------------------------------ */}
 
       <Modal
-        open={dialog === "submit"}
+        open={dialog === 'submit'}
         onClose={closeDialog}
-        title={
-          request.status === "RETURNED"
-            ? "ส่งคำขอกลับเข้าพิจารณา"
-            : "ส่งคำขอเข้าสู่กระบวนการ"
-        }
+        title={request.status === 'RETURNED' ? 'ส่งคำขอกลับเข้าพิจารณา' : 'ส่งคำขอเข้าสู่กระบวนการ'}
         footer={
           <>
             <Button variant="outline" onClick={closeDialog}>
@@ -723,9 +595,9 @@ export function RequestDetailPage() {
               disabled={!isFirstAuthor}
               onClick={() =>
                 run(
-                  `/requests/${request.id}/${request.status === "RETURNED" ? "resubmit" : "submit"}`,
+                  `/requests/${request.id}/${request.status === 'RETURNED' ? 'resubmit' : 'submit'}`,
                   { isFirstAuthor },
-                  "ส่งคำขอเรียบร้อยแล้ว",
+                  'ส่งคำขอเรียบร้อยแล้ว',
                 )
               }
             >
@@ -736,9 +608,8 @@ export function RequestDetailPage() {
       >
         <div className="space-y-3">
           <p className="text-sm text-slate-600">
-            ระบบจะตรวจกฎตามประกาศ 2131/2566 ก่อนส่ง ได้แก่ สิทธิ์ 3 เรื่องต่อปี
-            การเบิกซ้ำ ปีที่ตีพิมพ์ รายชื่อวารสารต้องห้าม เอกสารแนบครบ 3 ประเภท
-            และวงเงินปีงบประมาณ
+            ระบบจะตรวจกฎตามประกาศ 2131/2566 ก่อนส่ง ได้แก่ สิทธิ์ 3 เรื่องต่อปี การเบิกซ้ำ
+            ปีที่ตีพิมพ์ รายชื่อวารสารต้องห้าม เอกสารแนบครบ 3 ประเภท และวงเงินปีงบประมาณ
           </p>
 
           <label className="flex cursor-pointer items-start gap-2.5 rounded-lg bg-slate-50 p-3 text-sm">
@@ -749,8 +620,7 @@ export function RequestDetailPage() {
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600"
             />
             <span>
-              ข้าพเจ้าขอรับรองว่าเป็น
-              <strong>ผู้เขียนชื่อแรก (First author)</strong>ของบทความนี้
+              ข้าพเจ้าขอรับรองว่าเป็น<strong>ผู้เขียนชื่อแรก (First author)</strong>ของบทความนี้
               ตามเงื่อนไขของประกาศ
             </span>
           </label>
@@ -772,7 +642,7 @@ export function RequestDetailPage() {
       </Modal>
 
       <Modal
-        open={dialog === "approve"}
+        open={dialog === 'approve'}
         onClose={closeDialog}
         title="เห็นชอบและส่งต่อขั้นถัดไป"
         footer={
@@ -791,11 +661,9 @@ export function RequestDetailPage() {
                     // Only the faculty QA step records the QA round; the other
                     // steps leave it untouched.
                     qaIndicatorYear:
-                      request.status === "FACULTY_REVIEW" && qaYear
-                        ? Number(qaYear)
-                        : undefined,
+                      request.status === 'FACULTY_REVIEW' && qaYear ? Number(qaYear) : undefined,
                   },
-                  "บันทึกผลการพิจารณาแล้ว",
+                  'บันทึกผลการพิจารณาแล้ว',
                 )
               }
             >
@@ -805,7 +673,7 @@ export function RequestDetailPage() {
         }
       >
         {actionError && <Alert tone="error">{actionError}</Alert>}
-        {request.status === "FACULTY_REVIEW" && (
+        {request.status === 'FACULTY_REVIEW' && (
           <Field
             label="ปีตัวชี้วัดประกันคุณภาพ (พ.ศ.)"
             hint="ปีรอบรายงาน QA ที่นับบทความนี้ ปกติคือปีที่ตีพิมพ์ แก้ไขภายหลังได้"
@@ -821,15 +689,12 @@ export function RequestDetailPage() {
           </Field>
         )}
         <Field label="ความเห็น (ถ้ามี)" className="mt-3">
-          <Textarea
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-          />
+          <Textarea value={comment} onChange={(event) => setComment(event.target.value)} />
         </Field>
       </Modal>
 
       <Modal
-        open={dialog === "return"}
+        open={dialog === 'return'}
         onClose={closeDialog}
         title="ตีกลับให้ผู้ขอแก้ไข"
         footer={
@@ -844,7 +709,7 @@ export function RequestDetailPage() {
                 run(
                   `/requests/${request.id}/return`,
                   { missingDocuments, comment: comment || undefined },
-                  "ตีกลับคำขอแล้ว",
+                  'ตีกลับคำขอแล้ว',
                 )
               }
             >
@@ -856,8 +721,7 @@ export function RequestDetailPage() {
         {actionError && <Alert tone="error">{actionError}</Alert>}
         <div className="space-y-3">
           <Alert tone="info">
-            เมื่อผู้ขอแก้ไขและส่งกลับ เรื่องจะกลับมาที่ขั้นตอนนี้โดยตรง
-            ไม่ต้องเริ่มใหม่ทั้งกระบวนการ
+            เมื่อผู้ขอแก้ไขและส่งกลับ เรื่องจะกลับมาที่ขั้นตอนนี้โดยตรง ไม่ต้องเริ่มใหม่ทั้งกระบวนการ
           </Alert>
           <Field label="เอกสารหรือข้อมูลที่ต้องแก้ไข" required>
             <Textarea
@@ -867,16 +731,13 @@ export function RequestDetailPage() {
             />
           </Field>
           <Field label="ความเห็นเพิ่มเติม">
-            <Textarea
-              value={comment}
-              onChange={(event) => setComment(event.target.value)}
-            />
+            <Textarea value={comment} onChange={(event) => setComment(event.target.value)} />
           </Field>
         </div>
       </Modal>
 
       <Modal
-        open={dialog === "reject"}
+        open={dialog === 'reject'}
         onClose={closeDialog}
         title="ไม่อนุมัติคำขอ"
         footer={
@@ -888,13 +749,7 @@ export function RequestDetailPage() {
               variant="danger"
               loading={action.isPending}
               disabled={comment.trim().length < 5}
-              onClick={() =>
-                run(
-                  `/requests/${request.id}/reject`,
-                  { comment },
-                  "บันทึกผลไม่อนุมัติแล้ว",
-                )
-              }
+              onClick={() => run(`/requests/${request.id}/reject`, { comment }, 'บันทึกผลไม่อนุมัติแล้ว')}
             >
               ยืนยันไม่อนุมัติ
             </Button>
@@ -906,15 +761,12 @@ export function RequestDetailPage() {
           การไม่อนุมัติจะปิดเรื่องนี้ แต่จะไม่ตัดสิทธิ์ 1 ใน 3 เรื่องของผู้ขอ
         </Alert>
         <Field label="เหตุผลที่ไม่อนุมัติ" required className="mt-3">
-          <Textarea
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-          />
+          <Textarea value={comment} onChange={(event) => setComment(event.target.value)} />
         </Field>
       </Modal>
 
       <Modal
-        open={dialog === "final"}
+        open={dialog === 'final'}
         onClose={closeDialog}
         title="อนุมัติและระบุจำนวนเงิน"
         footer={
@@ -928,11 +780,8 @@ export function RequestDetailPage() {
               onClick={() =>
                 run(
                   `/requests/${request.id}/final-approve`,
-                  {
-                    amountApproved: Number(amountApproved),
-                    comment: comment || undefined,
-                  },
-                  "อนุมัติคำขอเรียบร้อยแล้ว",
+                  { amountApproved: Number(amountApproved), comment: comment || undefined },
+                  'อนุมัติคำขอเรียบร้อยแล้ว',
                 )
               }
             >
@@ -944,8 +793,8 @@ export function RequestDetailPage() {
         {actionError && <Alert tone="error">{actionError}</Alert>}
         <div className="space-y-3">
           <p className="text-sm text-slate-600">
-            ยอดที่ขอตามอัตราในประกาศ {formatMoney(request.amountRequested)}{" "}
-            อนุมัติน้อยกว่าได้ เนื่องจากประกาศใช้คำว่า &ldquo;ไม่เกิน&rdquo;
+            ยอดที่ขอตามอัตราในประกาศ {formatMoney(request.amountRequested)} อนุมัติน้อยกว่าได้
+            เนื่องจากประกาศใช้คำว่า &ldquo;ไม่เกิน&rdquo;
           </p>
           <Field label="จำนวนเงินที่อนุมัติ (บาท)" required>
             <Input
@@ -958,20 +807,16 @@ export function RequestDetailPage() {
             />
           </Field>
           <Field label="ความเห็น">
-            <Textarea
-              value={comment}
-              onChange={(event) => setComment(event.target.value)}
-            />
+            <Textarea value={comment} onChange={(event) => setComment(event.target.value)} />
           </Field>
           <Alert tone="info">
-            ระบบจะตรวจวงเงินคงเหลือของปีงบประมาณอีกครั้งขณะบันทึก
-            หากไม่พอจะยกเลิกทั้งรายการ
+            ระบบจะตรวจวงเงินคงเหลือของปีงบประมาณอีกครั้งขณะบันทึก หากไม่พอจะยกเลิกทั้งรายการ
           </Alert>
         </div>
       </Modal>
 
       <Modal
-        open={dialog === "committee"}
+        open={dialog === 'committee'}
         onClose={closeDialog}
         title="ส่งเข้าคณะกรรมการบริหารจัดการงานวิจัย"
         footer={
@@ -983,11 +828,7 @@ export function RequestDetailPage() {
               loading={action.isPending}
               disabled={comment.trim().length < 5}
               onClick={() =>
-                run(
-                  `/requests/${request.id}/to-committee`,
-                  { comment },
-                  "ส่งเข้าคณะกรรมการแล้ว",
-                )
+                run(`/requests/${request.id}/to-committee`, { comment }, 'ส่งเข้าคณะกรรมการแล้ว')
               }
             >
               ยืนยัน
@@ -997,15 +838,12 @@ export function RequestDetailPage() {
       >
         {actionError && <Alert tone="error">{actionError}</Alert>}
         <Field label="เหตุผลที่ต้องให้คณะกรรมการพิจารณา" required>
-          <Textarea
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-          />
+          <Textarea value={comment} onChange={(event) => setComment(event.target.value)} />
         </Field>
       </Modal>
 
       <Modal
-        open={dialog === "pay"}
+        open={dialog === 'pay'}
         onClose={closeDialog}
         title="บันทึกผลการเบิกจ่าย"
         footer={
@@ -1020,7 +858,7 @@ export function RequestDetailPage() {
                 run(
                   `/requests/${request.id}/pay`,
                   { voucherNo, paidAt, note: comment || undefined },
-                  "บันทึกการจ่ายเรียบร้อยแล้ว",
+                  'บันทึกการจ่ายเรียบร้อยแล้ว',
                 )
               }
             >
@@ -1035,29 +873,19 @@ export function RequestDetailPage() {
             จำนวนเงินที่อนุมัติ {formatMoney(request.amountApproved)}
           </p>
           <Field label="เลขที่ฎีกา" required>
-            <Input
-              value={voucherNo}
-              onChange={(event) => setVoucherNo(event.target.value)}
-            />
+            <Input value={voucherNo} onChange={(event) => setVoucherNo(event.target.value)} />
           </Field>
           <Field label="วันที่จ่าย" required>
-            <Input
-              type="date"
-              value={paidAt}
-              onChange={(event) => setPaidAt(event.target.value)}
-            />
+            <Input type="date" value={paidAt} onChange={(event) => setPaidAt(event.target.value)} />
           </Field>
           <Field label="หมายเหตุ">
-            <Textarea
-              value={comment}
-              onChange={(event) => setComment(event.target.value)}
-            />
+            <Textarea value={comment} onChange={(event) => setComment(event.target.value)} />
           </Field>
         </div>
       </Modal>
 
       <Modal
-        open={dialog === "cancel"}
+        open={dialog === 'cancel'}
         onClose={closeDialog}
         title="ยกเลิกคำขอ"
         footer={
@@ -1070,11 +898,11 @@ export function RequestDetailPage() {
               loading={action.isPending}
               onClick={() =>
                 action.mutate(
-                  { path: `/requests/${request.id}`, method: "delete" },
+                  { path: `/requests/${request.id}`, method: 'delete' },
                   {
                     onSuccess: async () => {
-                      await afterAction("ยกเลิกคำขอแล้ว");
-                      navigate("/requests");
+                      await afterAction('ยกเลิกคำขอแล้ว');
+                      navigate('/requests');
                     },
                   },
                 )
@@ -1087,14 +915,13 @@ export function RequestDetailPage() {
       >
         {actionError && <Alert tone="error">{actionError}</Alert>}
         <p className="text-sm text-slate-600">
-          ต้องการยกเลิกคำขอ {request.requestNo} ใช่หรือไม่
-          การยกเลิกไม่สามารถย้อนกลับได้
+          ต้องการยกเลิกคำขอ {request.requestNo} ใช่หรือไม่ การยกเลิกไม่สามารถย้อนกลับได้
           แต่คุณสามารถยื่นคำขอใหม่สำหรับบทความนี้ได้
         </p>
       </Modal>
 
       <Modal
-        open={dialog === "qa-year"}
+        open={dialog === 'qa-year'}
         onClose={closeDialog}
         title="บันทึกปีตัวชี้วัดประกันคุณภาพ"
         footer={
@@ -1109,12 +936,10 @@ export function RequestDetailPage() {
                 action.mutate(
                   {
                     path: `/requests/${request.id}/qa-year`,
-                    method: "patch",
+                    method: 'patch',
                     body: { qaIndicatorYear: Number(qaYear) },
                   },
-                  {
-                    onSuccess: () => void afterAction("บันทึกปีตัวชี้วัดแล้ว"),
-                  },
+                  { onSuccess: () => void afterAction('บันทึกปีตัวชี้วัดแล้ว') },
                 )
               }
             >
@@ -1126,8 +951,8 @@ export function RequestDetailPage() {
         {actionError && <Alert tone="error">{actionError}</Alert>}
         <div className="space-y-3">
           <p className="text-sm text-slate-600">
-            ปีรอบรายงานประกันคุณภาพที่นับบทความนี้ ใช้ในรายงานตัวชี้วัด QA
-            ของคณะ บทความที่ตีพิมพ์ปลายปีบางครั้งนับในรอบถัดไป
+            ปีรอบรายงานประกันคุณภาพที่นับบทความนี้ ใช้ในรายงานตัวชี้วัด QA ของคณะ
+            บทความที่ตีพิมพ์ปลายปีบางครั้งนับในรอบถัดไป
           </p>
           <Field label="ปี พ.ศ." required>
             <Input

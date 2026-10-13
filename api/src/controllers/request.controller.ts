@@ -1,18 +1,10 @@
-import type { Request, Response } from "express";
-import {
-  asyncHandler,
-  clientIp,
-  getQuery,
-  idParam,
-} from "../middleware/validate";
-import { serialize } from "../utils/serialize";
-import { unauthorized } from "../utils/errors";
-import * as requestService from "../services/request.service";
-import {
-  buildReceiptVoucher,
-  buildRequestDocument,
-} from "../services/pdf.service";
-import type { ListRequestsQuery } from "../validators/request.schema";
+import type { Request, Response } from 'express';
+import { asyncHandler, clientIp, getQuery, idParam } from '../middleware/validate';
+import { serialize } from '../utils/serialize';
+import { unauthorized } from '../utils/errors';
+import * as requestService from '../services/request.service';
+import { buildReceiptVoucher, buildRequestDocument } from '../services/pdf.service';
+import type { ListRequestsQuery } from '../validators/request.schema';
 
 function requireUser(req: Request) {
   if (!req.user) throw unauthorized();
@@ -46,11 +38,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 
 export const update = asyncHandler(async (req: Request, res: Response) => {
   const user = requireUser(req);
-  const request = await requestService.updateRequest(
-    user,
-    idParam(req),
-    req.body,
-  );
+  const request = await requestService.updateRequest(user, idParam(req), req.body);
   res.json(serialize(request));
 });
 
@@ -98,19 +86,14 @@ export const checkSubmit = asyncHandler(async (req: Request, res: Response) => {
   res.json(serialize(result));
 });
 
-export const previewAmount = asyncHandler(
-  async (req: Request, res: Response) => {
-    const { journalTierId, fromConference } = req.body as {
-      journalTierId: string;
-      fromConference: boolean;
-    };
-    const result = await requestService.previewAmount(
-      BigInt(journalTierId),
-      fromConference,
-    );
-    res.json(serialize(result));
-  },
-);
+export const previewAmount = asyncHandler(async (req: Request, res: Response) => {
+  const { journalTierId, fromConference } = req.body as {
+    journalTierId: string;
+    fromConference: boolean;
+  };
+  const result = await requestService.previewAmount(BigInt(journalTierId), fromConference);
+  res.json(serialize(result));
+});
 
 export const myQuota = asyncHandler(async (req: Request, res: Response) => {
   const user = requireUser(req);
@@ -127,28 +110,22 @@ export const document = asyncHandler(async (req: Request, res: Response) => {
   // the error handler as JSON rather than as a truncated PDF.
   const document = buildRequestDocument(request);
 
-  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader('Content-Type', 'application/pdf');
   res.setHeader(
-    "Content-Disposition",
+    'Content-Disposition',
     `inline; filename="${request.requestNo}.pdf"; filename*=UTF-8''${encodeURIComponent(`${request.requestNo}.pdf`)}`,
   );
 
   // Same reason as the attachment download: an unhandled 'error' here would kill
   // the process, not just this response.
-  document.on("error", (error: unknown) => {
-    console.error(
-      "[pdf] render failed",
-      error instanceof Error ? error.message : error,
-    );
+  document.on('error', (error: unknown) => {
+    console.error('[pdf] render failed', error instanceof Error ? error.message : error);
     if (res.headersSent) {
       res.destroy();
       return;
     }
     res.status(500).json({
-      error: {
-        code: "PDF_RENDER_FAILED",
-        message: "สร้างเอกสาร PDF ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
-      },
+      error: { code: 'PDF_RENDER_FAILED', message: 'สร้างเอกสาร PDF ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' },
     });
   });
 
@@ -166,27 +143,21 @@ export const receipt = asyncHandler(async (req: Request, res: Response) => {
 
   const document = buildReceiptVoucher(request);
 
-  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader('Content-Type', 'application/pdf');
   const fileName = `${request.requestNo}-ใบสำคัญรับเงิน.pdf`;
   res.setHeader(
-    "Content-Disposition",
+    'Content-Disposition',
     `inline; filename="${request.requestNo}-receipt.pdf"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
   );
 
-  document.on("error", (error: unknown) => {
-    console.error(
-      "[pdf] receipt render failed",
-      error instanceof Error ? error.message : error,
-    );
+  document.on('error', (error: unknown) => {
+    console.error('[pdf] receipt render failed', error instanceof Error ? error.message : error);
     if (res.headersSent) {
       res.destroy();
       return;
     }
     res.status(500).json({
-      error: {
-        code: "PDF_RENDER_FAILED",
-        message: "สร้างเอกสาร PDF ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
-      },
+      error: { code: 'PDF_RENDER_FAILED', message: 'สร้างเอกสาร PDF ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง' },
     });
   });
 
