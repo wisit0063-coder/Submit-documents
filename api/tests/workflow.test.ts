@@ -12,6 +12,7 @@ import {
   MAX_ARTICLES_PER_CALENDAR_YEAR,
   STATUS_LABELS_TH,
   WORKFLOW_STEPS,
+  stepByCode,
   stepByOrder,
   stepByStatus,
 } from '../src/config/workflow';
@@ -55,6 +56,22 @@ test('a status resolves back to exactly one step', () => {
   for (const step of WORKFLOW_STEPS) {
     assert.equal(stepByStatus(step.status)?.order, step.order);
     assert.equal(stepByOrder(step.order)?.status, step.status);
+  }
+});
+
+test('every step code resolves to a Thai label the memo can print', () => {
+  // The printed memo (CPRU-RDI-F011) must never show the enum code: it is an
+  // official document. Every code that can reach request_approvals therefore
+  // has to resolve, committee review included.
+  for (const step of [...WORKFLOW_STEPS, COMMITTEE_STEP]) {
+    const found = stepByCode(step.stepCode);
+    assert.equal(found?.stepCode, step.stepCode);
+    assert.equal(found?.labelTh, step.labelTh);
+    assert.ok(found!.labelTh.length > 0, `${step.stepCode} has no Thai label`);
+    assert.ok(
+      !/^[A-Z_]+$/.test(found!.labelTh),
+      `${step.stepCode} still resolves to a code, not a label`,
+    );
   }
 });
 

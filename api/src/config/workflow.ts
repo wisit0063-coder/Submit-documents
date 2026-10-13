@@ -99,6 +99,16 @@ export function stepByStatus(status: RequestStatus): WorkflowStep | undefined {
   return WORKFLOW_STEPS.find((step) => step.status === status);
 }
 
+/**
+ * Looks a step up by its stored code. Used where a row in request_approvals is
+ * turned back into something a reader understands - the printed memo prints the
+ * Thai label, never the enum code.
+ */
+export function stepByCode(stepCode: ApprovalStepCode): WorkflowStep | undefined {
+  if (stepCode === COMMITTEE_STEP.stepCode) return COMMITTEE_STEP;
+  return WORKFLOW_STEPS.find((step) => step.stepCode === stepCode);
+}
+
 export function stepByOrder(order: number): WorkflowStep | undefined {
   if (order === COMMITTEE_STEP.order) return COMMITTEE_STEP;
   return WORKFLOW_STEPS.find((step) => step.order === order);

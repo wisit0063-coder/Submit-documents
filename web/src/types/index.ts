@@ -109,6 +109,15 @@ export interface Approval {
   amountApproved: number | null;
   signedAt: string | null;
   approver: PersonRef | null;
+  /**
+   * Name and position as they stood when the step was signed. Prefer these over
+   * `approver`, which is the account as it stands today: an account gets renamed
+   * and a position account changes hands, and neither may rewrite a signature
+   * (CLAUDE.md section 19.1). Null on a pending step and on rows written before
+   * the snapshot existed.
+   */
+  approverName: string | null;
+  approverPosition: string | null;
 }
 
 export interface Payment {

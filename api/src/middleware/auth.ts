@@ -9,6 +9,8 @@ export interface AuthUser {
   username: string;
   email: string;
   fullName: string;
+  /** Academic position as it stands now; snapshotted onto signatures. */
+  academicPosition: string | null;
   departmentId: bigint | null;
   facultyId: bigint | null;
   mustChangePassword: boolean;
@@ -42,6 +44,7 @@ export async function loadAuthUser(userId: bigint): Promise<AuthUser | null> {
     username: user.username,
     email: user.email,
     fullName: `${user.prefix ?? ''}${user.firstName} ${user.lastName}`.trim(),
+    academicPosition: user.academicPosition,
     departmentId: user.departmentId,
     // The unit lives on the user (section 13.6) because a self-registered
     // person may have no department. Older accounts fall back to theirs.

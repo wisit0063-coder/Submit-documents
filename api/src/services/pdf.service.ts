@@ -5,7 +5,7 @@ import type { TDocumentDefinitions, Content } from 'pdfmake/interfaces';
 import { AppError } from '../utils/errors';
 import { formatThaiDate } from '../utils/datetime';
 import { DOC_TYPE_LABELS } from './attachment.service';
-import { STATUS_LABELS_TH } from '../config/workflow';
+import { STATUS_LABELS_TH, stepByCode } from '../config/workflow';
 import type { RequestDetail } from './request.service';
 
 /**
@@ -166,9 +166,20 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
   const tier = request.journalTier;
 
   const approvalRows: Content[] = request.approvals.map((approval) => {
-    const approverName = approval.approver
+    // The name is read from the snapshot taken when the step was signed, never
+    // composed from the account: an account gets renamed, and a position account
+    // is handed to the next holder about every four years, and neither may
+    // rewrite who signed this memo (section 19.1). The fallback to the live
+    // account covers only rows written before the snapshot column existed.
+    const liveName = approval.approver
       ? `${approval.approver.prefix ?? ''}${approval.approver.firstName} ${approval.approver.lastName}`
-      : '(ยังไม่ได้ลงนาม)';
+      : null;
+    const approverName = approval.approverName ?? liveName ?? '(ยังไม่ได้ลงนาม)';
+    const approverPosition =
+      approval.approverPosition ?? approval.approver?.academicPosition ?? null;
+    // The memo is an official document: it prints the Thai label of the step,
+    // not the enum code stored in the column.
+    const stepLabel = stepByCode(approval.stepCode)?.labelTh ?? approval.stepCode;
     const decisionLabel =
       approval.decision === 'APPROVED'
         ? 'เห็นชอบ / อนุมัติ'
@@ -181,9 +192,10 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
     return {
       margin: [0, 6, 0, 6],
       stack: [
-        { text: `ขั้นที่ ${approval.stepOrder}: ${approval.stepCode}`, bold: true },
+        { text: `ขั้นที่ ${approval.stepOrder}: ${stepLabel}`, bold: true },
         { text: `ผลการพิจารณา: ${decisionLabel}` },
         { text: `ผู้ลงนาม: ${approverName}` },
+        ...(approverPosition ? [{ text: `ตำแหน่ง: ${approverPosition}` }] : []),
         {
           text: `วันที่: ${approval.signedAt ? formatThaiDate(approval.signedAt) : '-'}`,
         },

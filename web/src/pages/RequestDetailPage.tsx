@@ -8,6 +8,7 @@ import {
   formatDateTime,
   formatMoney,
   personName,
+  signerName,
   STATUS_LABELS,
   STATUS_TONE,
   STEP_LABELS,
@@ -282,7 +283,7 @@ export function RequestDetailPage() {
           <Alert tone="warning" title="คำขอถูกตีกลับให้แก้ไข">
             <p>
               จากขั้น {STEP_LABELS[lastReturn.stepCode] ?? lastReturn.stepCode} โดย{' '}
-              {personName(lastReturn.approver)} เมื่อ {formatDateTime(lastReturn.signedAt)}
+              {signerName(lastReturn)} เมื่อ {formatDateTime(lastReturn.signedAt)}
             </p>
             <p className="mt-1 font-medium">สิ่งที่ต้องแก้ไข: {lastReturn.missingDocuments}</p>
             {lastReturn.comment && <p className="mt-1">ความเห็นเพิ่มเติม: {lastReturn.comment}</p>}
@@ -481,9 +482,11 @@ export function RequestDetailPage() {
                               : 'รอพิจารณา'}
                       </Badge>
                     </div>
-                    {approval.approver && (
+                    {(approval.approverName || approval.approver) && (
                       <p className="mt-1 text-xs text-slate-600">
-                        {personName(approval.approver)} · {formatDateTime(approval.signedAt)}
+                        {signerName(approval)}
+                        {approval.approverPosition ? ` (${approval.approverPosition})` : ''} ·{' '}
+                        {formatDateTime(approval.signedAt)}
                       </p>
                     )}
                     {approval.comment && (

@@ -50,6 +50,19 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * The name to print against a signature: the snapshot taken when the step was
+ * signed, and only for rows older than that column the account as it stands now
+ * (CLAUDE.md section 19.1). Never compose this from the account directly - a
+ * rename, or a position account changing hands, would rewrite who signed.
+ */
+export function signerName(approval: {
+  approverName?: string | null;
+  approver?: { prefix?: string | null; firstName: string; lastName: string } | null;
+}): string {
+  return approval.approverName?.trim() || personName(approval.approver);
+}
+
 export function personName(person: {
   prefix?: string | null;
   firstName: string;

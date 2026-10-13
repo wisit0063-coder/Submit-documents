@@ -43,6 +43,7 @@ export async function recordPayment(
         amount: request.amountApproved as Prisma.Decimal,
         paidAt: new Date(input.paidAt),
         recordedBy: user.id,
+        recordedByName: user.fullName,
         note: input.note ?? null,
       },
     });
@@ -56,7 +57,7 @@ export async function recordPayment(
       requestId: request.id,
       fromStatus: RequestStatus.APPROVED,
       toStatus: RequestStatus.PAID,
-      actorId: user.id,
+      actor: user,
       note: input.voucherNo?.trim()
         ? `บันทึกการเบิกจ่ายตามฎีกาเลขที่ ${input.voucherNo.trim()}`
         : 'บันทึกการเบิกจ่าย ยังไม่ได้ระบุเลขที่ฎีกา',
@@ -133,7 +134,7 @@ export async function refundPayment(
       requestId: payment.requestId,
       fromStatus: payment.request.status,
       toStatus: isFullRefund ? RequestStatus.REFUNDED : payment.request.status,
-      actorId: user.id,
+      actor: user,
       note:
         `เรียกเงินคืน ${input.refundAmount.toLocaleString('th-TH')} บาท` +
         (isFullRefund ? '' : ' (บางส่วน คำขอยังคงสถานะจ่ายแล้ว)') +

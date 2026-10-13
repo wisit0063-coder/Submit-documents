@@ -75,6 +75,8 @@ const fixture = {
       missingDocuments: null,
       amountApproved: null,
       approver: { prefix: 'นาง', firstName: 'สุดา', lastName: 'ประกันคุณภาพ' },
+      approverName: 'นางสุดา ประกันคุณภาพ',
+      approverPosition: null,
     },
     {
       stepOrder: 2,
@@ -85,6 +87,8 @@ const fixture = {
       missingDocuments: null,
       amountApproved: null,
       approver: { prefix: 'รองศาสตราจารย์ ดร.', firstName: 'วิชัย', lastName: 'คณบดีศรีสุข' },
+      approverName: 'รองศาสตราจารย์ ดร.วิชัย คณบดีศรีสุข',
+      approverPosition: 'รองศาสตราจารย์',
     },
     {
       stepOrder: 5,
@@ -95,6 +99,8 @@ const fixture = {
       missingDocuments: null,
       amountApproved: 5000,
       approver: { prefix: 'รองศาสตราจารย์ ดร.', firstName: 'ประเสริฐ', lastName: 'รองอธิการบดี' },
+      approverName: 'รองศาสตราจารย์ ดร.ประเสริฐ รองอธิการบดี',
+      approverPosition: 'รองศาสตราจารย์',
     },
   ],
   payment: { voucherNo: 'ฎ.1234/2569', amount: 5000, paidAt: new Date('2026-06-01') },

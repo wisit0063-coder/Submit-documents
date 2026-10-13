@@ -109,13 +109,21 @@ export async function lockRequest(
   }
 }
 
+/**
+ * Appends to the status log, which is this system's stand-in for a signature on
+ * paper (section 5 rule 6).
+ *
+ * Takes the whole actor rather than an id so the name is snapshotted in the same
+ * statement as the change (section 19.1). `null` is for changes no account made,
+ * such as a scheduled job.
+ */
 export async function writeStatusLog(
   client: Tx,
   params: {
     requestId: bigint;
     fromStatus: RequestStatus | null;
     toStatus: RequestStatus;
-    actorId: bigint | null;
+    actor: AuthUser | null;
     note?: string | null;
     ipAddress?: string | null;
   },
@@ -125,7 +133,8 @@ export async function writeStatusLog(
       requestId: params.requestId,
       fromStatus: params.fromStatus,
       toStatus: params.toStatus,
-      actorId: params.actorId,
+      actorId: params.actor?.id ?? null,
+      actorName: params.actor?.fullName ?? null,
       note: params.note ?? null,
       ipAddress: params.ipAddress ?? null,
     },
@@ -441,7 +450,7 @@ export async function createRequest(user: AuthUser, input: CreateRequestInput) {
       requestId: request.id,
       fromStatus: null,
       toStatus: RequestStatus.DRAFT,
-      actorId: user.id,
+      actor: user,
       note: 'สร้างคำขอฉบับร่าง',
     });
 
@@ -580,7 +589,7 @@ export async function submitRequest(
       requestId: id,
       fromStatus: RequestStatus.DRAFT,
       toStatus: FIRST_STEP.status,
-      actorId: user.id,
+      actor: user,
       note: 'ยื่นคำขอ พร้อมรับรองว่าเป็นผู้เขียนชื่อแรก (First author)',
       ipAddress,
     });
@@ -662,7 +671,7 @@ export async function resubmitRequest(
       requestId: id,
       fromStatus: RequestStatus.RETURNED,
       toStatus: targetStep.status,
-      actorId: user.id,
+      actor: user,
       note: `ส่งคำขอที่แก้ไขแล้วกลับเข้าขั้นตอน "${targetStep.labelTh}"`,
       ipAddress,
     });
@@ -705,7 +714,7 @@ export async function cancelRequest(user: AuthUser, id: bigint, ipAddress: strin
       requestId: id,
       fromStatus: request.status,
       toStatus: RequestStatus.CANCELLED,
-      actorId: user.id,
+      actor: user,
       note: 'ผู้ขอยกเลิกคำขอ',
       ipAddress,
     });

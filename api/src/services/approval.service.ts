@@ -70,12 +70,19 @@ export async function assertCanActOnStep(
   return { request, step };
 }
 
+/**
+ * Writes the signature row for one step.
+ *
+ * Takes the whole actor rather than an id so the signer's name and position are
+ * snapshotted in the same statement as the signature itself (section 19.1): an
+ * id alone would let a later rename rewrite who signed.
+ */
 async function recordApproval(
   tx: Tx,
   params: {
     requestId: bigint;
     step: WorkflowStep;
-    approverId: bigint;
+    actor: AuthUser;
     decision: ApprovalDecision;
     comment?: string | null;
     missingDocuments?: string | null;
@@ -83,7 +90,9 @@ async function recordApproval(
   },
 ) {
   const data = {
-    approverId: params.approverId,
+    approverId: params.actor.id,
+    approverName: params.actor.fullName,
+    approverPosition: params.actor.academicPosition,
     decision: params.decision,
     comment: params.comment ?? null,
     missingDocuments: params.missingDocuments ?? null,
@@ -127,7 +136,7 @@ export async function approveStep(
     await recordApproval(tx, {
       requestId,
       step,
-      approverId: user.id,
+      actor: user,
       decision: ApprovalDecision.APPROVED,
       comment: input.comment ?? null,
     });
@@ -159,7 +168,7 @@ export async function approveStep(
       requestId,
       fromStatus: request.status,
       toStatus: step.nextStatus,
-      actorId: user.id,
+      actor: user,
       note: input.comment ?? `ผ่านขั้นตอน ${step.labelTh}`,
       ipAddress,
     });
@@ -200,7 +209,7 @@ export async function returnStep(
     await recordApproval(tx, {
       requestId,
       step,
-      approverId: user.id,
+      actor: user,
       decision: ApprovalDecision.RETURNED,
       comment: input.comment ?? null,
       missingDocuments: input.missingDocuments,
@@ -215,7 +224,7 @@ export async function returnStep(
       requestId,
       fromStatus: request.status,
       toStatus: RequestStatus.RETURNED,
-      actorId: user.id,
+      actor: user,
       note: `ตีกลับจากขั้น ${step.labelTh}: ${input.missingDocuments}`,
       ipAddress,
     });
@@ -251,7 +260,7 @@ export async function rejectRequest(
     await recordApproval(tx, {
       requestId,
       step,
-      approverId: user.id,
+      actor: user,
       decision: ApprovalDecision.REJECTED,
       comment,
     });
@@ -265,7 +274,7 @@ export async function rejectRequest(
       requestId,
       fromStatus: request.status,
       toStatus: RequestStatus.REJECTED,
-      actorId: user.id,
+      actor: user,
       note: comment,
       ipAddress,
     });
@@ -353,7 +362,7 @@ export async function finalApprove(
     await recordApproval(tx, {
       requestId,
       step,
-      approverId: user.id,
+      actor: user,
       decision: ApprovalDecision.APPROVED,
       comment: input.comment ?? null,
       amountApproved: input.amountApproved,
@@ -385,7 +394,7 @@ export async function finalApprove(
       requestId,
       fromStatus: request.status,
       toStatus: RequestStatus.APPROVED,
-      actorId: user.id,
+      actor: user,
       note:
         `อนุมัติจำนวน ${input.amountApproved.toLocaleString('th-TH')} บาท` +
         (input.comment ? ` - ${input.comment}` : ''),
@@ -424,7 +433,7 @@ export async function sendToCommittee(
     await recordApproval(tx, {
       requestId,
       step,
-      approverId: user.id,
+      actor: user,
       decision: ApprovalDecision.APPROVED,
       comment: `ส่งเข้าคณะกรรมการ: ${comment}`,
     });
@@ -449,7 +458,7 @@ export async function sendToCommittee(
       requestId,
       fromStatus: request.status,
       toStatus: RequestStatus.COMMITTEE_REVIEW,
-      actorId: user.id,
+      actor: user,
       note: comment,
       ipAddress,
     });
