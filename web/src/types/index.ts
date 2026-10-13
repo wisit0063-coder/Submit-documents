@@ -189,6 +189,10 @@ export interface RequestDetail extends RequestSummary {
   issue: string | null;
   pages: string | null;
   issn: string | null;
+  /** e-ISSN. The receipt voucher prints it beside the printed ISSN. */
+  issnElectronic: string | null;
+  /** Coverage as the journal prints it, e.g. "พฤษภาคม-สิงหาคม 2569". Display only. */
+  issuePeriod: string | null;
   doi: string | null;
   articleUrl: string | null;
   fromConference: boolean;

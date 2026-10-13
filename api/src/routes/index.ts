@@ -92,6 +92,7 @@ router.put('/requests/:id', validateBody(updateRequestSchema), requestController
 router.delete('/requests/:id', requestController.cancel);
 router.get('/requests/:id/timeline', requestController.timeline);
 router.get('/requests/:id/document', requestController.document);
+router.get('/requests/:id/receipt', requestController.receipt);
 router.post('/requests/:id/check-submit', requestController.checkSubmit);
 router.post('/requests/:id/submit', validateBody(submitSchema), requestController.submit);
 router.post('/requests/:id/resubmit', validateBody(submitSchema), requestController.resubmit);

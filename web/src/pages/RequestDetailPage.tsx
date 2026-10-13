@@ -290,6 +290,17 @@ export function RequestDetailPage() {
             >
               <Button variant="outline">พิมพ์บันทึกข้อความ (PDF)</Button>
             </a>
+            {/* The voucher is what the claimant signs for the money, so it only
+                exists once an amount has been approved. */}
+            {request.amountApproved !== null && (
+              <a
+                href={api.fileUrl(`/requests/${request.id}/receipt`)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Button variant="outline">พิมพ์ใบสำคัญรับเงิน (PDF)</Button>
+              </a>
+            )}
             {canEditDraft && (
               <Link to={`/requests/${request.id}/edit`}>
                 <Button variant="outline">แก้ไข</Button>

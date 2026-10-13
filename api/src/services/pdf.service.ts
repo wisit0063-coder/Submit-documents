@@ -1,12 +1,13 @@
-import fs from 'fs';
-import path from 'path';
-import PdfPrinter from 'pdfmake';
-import type { TDocumentDefinitions, Content } from 'pdfmake/interfaces';
-import { AppError } from '../utils/errors';
-import { formatThaiDate } from '../utils/datetime';
-import { DOC_TYPE_LABELS } from './attachment.service';
-import { STATUS_LABELS_TH, stepByCode } from '../config/workflow';
-import type { RequestDetail } from './request.service';
+import fs from "fs";
+import path from "path";
+import PdfPrinter from "pdfmake";
+import type { TDocumentDefinitions, Content } from "pdfmake/interfaces";
+import { AppError } from "../utils/errors";
+import { formatThaiDate } from "../utils/datetime";
+import { bahtText } from "../utils/baht-text";
+import { DOC_TYPE_LABELS } from "./attachment.service";
+import { STATUS_LABELS_TH, stepByCode } from "../config/workflow";
+import type { RequestDetail } from "./request.service";
 
 /**
  * TH SarabunPSK - the face named in the government typing rules
@@ -29,10 +30,10 @@ import type { RequestDetail } from './request.service';
  * better tone-mark placement), replace the four files and keep the names.
  */
 const FONT_FILE_NAMES = {
-  normal: 'THSarabunPSK-Regular.ttf',
-  bold: 'THSarabunPSK-Bold.ttf',
-  italics: 'THSarabunPSK-Italic.ttf',
-  bolditalics: 'THSarabunPSK-BoldItalic.ttf',
+  normal: "THSarabunPSK-Regular.ttf",
+  bold: "THSarabunPSK-Bold.ttf",
+  italics: "THSarabunPSK-Italic.ttf",
+  bolditalics: "THSarabunPSK-BoldItalic.ttf",
 } as const;
 
 /**
@@ -77,13 +78,15 @@ const PARAGRAPH_INDENT = Math.round(2.5 * CM);
 export function resolveFontDir(): string {
   const candidates = [
     process.env.FONT_DIR,
-    path.resolve(process.cwd(), 'assets/fonts'),
-    path.resolve(__dirname, '../../assets/fonts'),
-    path.resolve(__dirname, '../../../assets/fonts'),
+    path.resolve(process.cwd(), "assets/fonts"),
+    path.resolve(__dirname, "../../assets/fonts"),
+    path.resolve(__dirname, "../../../assets/fonts"),
   ].filter((dir): dir is string => Boolean(dir));
 
   const found = candidates.find((dir) =>
-    Object.values(FONT_FILE_NAMES).every((file) => fs.existsSync(path.join(dir, file))),
+    Object.values(FONT_FILE_NAMES).every((file) =>
+      fs.existsSync(path.join(dir, file)),
+    ),
   );
   // Nothing found: return the first candidate so the error names a real path.
   return found ?? candidates[0]!;
@@ -103,13 +106,15 @@ let printer: PdfPrinter | null = null;
 function getPrinter(): PdfPrinter {
   if (printer) return printer;
 
-  const missing = Object.values(fontFiles).filter((file) => !fs.existsSync(file));
+  const missing = Object.values(fontFiles).filter(
+    (file) => !fs.existsSync(file),
+  );
   if (missing.length > 0) {
     throw new AppError(
       500,
-      'FONT_NOT_INSTALLED',
-      'ยังไม่ได้ติดตั้งฟอนต์ TH SarabunPSK บนเซิร์ฟเวอร์ จึงออกเอกสาร PDF ไม่ได้ ' +
-        'กรุณาวางไฟล์ฟอนต์ไว้ที่ api/assets/fonts/ ตามคู่มือติดตั้ง',
+      "FONT_NOT_INSTALLED",
+      "ยังไม่ได้ติดตั้งฟอนต์ TH SarabunPSK บนเซิร์ฟเวอร์ จึงออกเอกสาร PDF ไม่ได้ " +
+        "กรุณาวางไฟล์ฟอนต์ไว้ที่ api/assets/fonts/ ตามคู่มือติดตั้ง",
       { missing: missing.map((file) => path.basename(file)) },
     );
   }
@@ -119,13 +124,16 @@ function getPrinter(): PdfPrinter {
 }
 
 const money = (value: number) =>
-  value.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  value.toLocaleString("th-TH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 function labelValue(label: string, value: string): Content {
   return {
     columns: [
       { text: label, width: 130, bold: true },
-      { text: value || '-', width: '*' },
+      { text: value || "-", width: "*" },
     ],
     margin: [0, 1, 0, 1],
   };
@@ -139,10 +147,10 @@ function labelValue(label: string, value: string): Content {
 function headerRow(label: string, value: string): Content {
   return {
     columns: [
-      { text: label, width: 'auto', fontSize: SIZE.headerLabel, bold: true },
+      { text: label, width: "auto", fontSize: SIZE.headerLabel, bold: true },
       {
-        text: value || '-',
-        width: '*',
+        text: value || "-",
+        width: "*",
         fontSize: SIZE.body,
         margin: [6, (SIZE.headerLabel - SIZE.body) * 0.8, 0, 0],
       },
@@ -156,13 +164,15 @@ function headerRow(label: string, value: string): Content {
  * The signature blocks are filled from request_approvals, which is what stands
  * in for handwritten signatures in this system.
  */
-export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStream {
+export function buildRequestDocument(
+  request: RequestDetail,
+): NodeJS.ReadableStream {
   // Resolve the fonts first: a missing font must fail before the response has
   // started streaming, so the client gets a readable error instead of a broken file.
   const pdfPrinter = getPrinter();
 
   const owner = request.owner;
-  const ownerName = `${owner.prefix ?? ''}${owner.firstName} ${owner.lastName}`;
+  const ownerName = `${owner.prefix ?? ""}${owner.firstName} ${owner.lastName}`;
   const tier = request.journalTier;
 
   const approvalRows: Content[] = request.approvals.map((approval) => {
@@ -172,22 +182,24 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
     // rewrite who signed this memo (section 19.1). The fallback to the live
     // account covers only rows written before the snapshot column existed.
     const liveName = approval.approver
-      ? `${approval.approver.prefix ?? ''}${approval.approver.firstName} ${approval.approver.lastName}`
+      ? `${approval.approver.prefix ?? ""}${approval.approver.firstName} ${approval.approver.lastName}`
       : null;
-    const approverName = approval.approverName ?? liveName ?? '(ยังไม่ได้ลงนาม)';
+    const approverName =
+      approval.approverName ?? liveName ?? "(ยังไม่ได้ลงนาม)";
     const approverPosition =
       approval.approverPosition ?? approval.approver?.academicPosition ?? null;
     // The memo is an official document: it prints the Thai label of the step,
     // not the enum code stored in the column.
-    const stepLabel = stepByCode(approval.stepCode)?.labelTh ?? approval.stepCode;
+    const stepLabel =
+      stepByCode(approval.stepCode)?.labelTh ?? approval.stepCode;
     const decisionLabel =
-      approval.decision === 'APPROVED'
-        ? 'เห็นชอบ / อนุมัติ'
-        : approval.decision === 'RETURNED'
-          ? 'ส่งกลับให้แก้ไข'
-          : approval.decision === 'REJECTED'
-            ? 'ไม่อนุมัติ'
-            : 'รอพิจารณา';
+      approval.decision === "APPROVED"
+        ? "เห็นชอบ / อนุมัติ"
+        : approval.decision === "RETURNED"
+          ? "ส่งกลับให้แก้ไข"
+          : approval.decision === "REJECTED"
+            ? "ไม่อนุมัติ"
+            : "รอพิจารณา";
 
     return {
       margin: [0, 6, 0, 6],
@@ -197,125 +209,170 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
         { text: `ผู้ลงนาม: ${approverName}` },
         ...(approverPosition ? [{ text: `ตำแหน่ง: ${approverPosition}` }] : []),
         {
-          text: `วันที่: ${approval.signedAt ? formatThaiDate(approval.signedAt) : '-'}`,
+          text: `วันที่: ${approval.signedAt ? formatThaiDate(approval.signedAt) : "-"}`,
         },
-        ...(approval.comment ? [{ text: `ความเห็น: ${approval.comment}` }] : []),
+        ...(approval.comment
+          ? [{ text: `ความเห็น: ${approval.comment}` }]
+          : []),
         ...(approval.missingDocuments
           ? [{ text: `เอกสารที่ต้องแก้ไข: ${approval.missingDocuments}` }]
           : []),
         ...(approval.amountApproved
-          ? [{ text: `จำนวนเงินที่อนุมัติ: ${money(Number(approval.amountApproved))} บาท`, bold: true }]
+          ? [
+              {
+                text: `จำนวนเงินที่อนุมัติ: ${money(Number(approval.amountApproved))} บาท`,
+                bold: true,
+              },
+            ]
           : []),
       ],
     };
   });
 
   const definition: TDocumentDefinitions = {
-    pageSize: 'A4',
+    pageSize: "A4",
     pageMargins: MARGINS,
-    defaultStyle: { font: 'THSarabun', fontSize: SIZE.body, lineHeight: 1 },
+    defaultStyle: { font: "THSarabun", fontSize: SIZE.body, lineHeight: 1 },
     info: {
       title: `${request.requestNo} - บันทึกข้อความขอรับค่าตอบแทนการตีพิมพ์`,
-      author: 'มหาวิทยาลัยราชภัฏชัยภูมิ',
+      author: "มหาวิทยาลัยราชภัฏชัยภูมิ",
     },
     content: [
-      { text: 'บันทึกข้อความ', fontSize: SIZE.title, bold: true, alignment: 'center' },
       {
-        text: 'แบบฟอร์ม CPRU-RDI-F011',
+        text: "บันทึกข้อความ",
+        fontSize: SIZE.title,
+        bold: true,
+        alignment: "center",
+      },
+      {
+        text: "แบบฟอร์ม CPRU-RDI-F011",
         fontSize: SIZE.small,
-        alignment: 'right',
+        alignment: "right",
         margin: [0, -20, 0, 10],
       },
       // The header block follows the shape of the printed form: the unit on its
       // own line, then the reference number and date sharing one, then subject.
-      headerRow('ส่วนราชการ', `${request.faculty.nameTh} มหาวิทยาลัยราชภัฏชัยภูมิ`),
+      headerRow(
+        "ส่วนราชการ",
+        `${request.faculty.nameTh} มหาวิทยาลัยราชภัฏชัยภูมิ`,
+      ),
       {
         columns: [
-          headerRow('ที่', request.requestNo),
-          headerRow('วันที่', formatThaiDate(request.submittedAt ?? request.createdAt)),
+          headerRow("ที่", request.requestNo),
+          headerRow(
+            "วันที่",
+            formatThaiDate(request.submittedAt ?? request.createdAt),
+          ),
         ],
         columnGap: 12,
       },
-      headerRow('เรื่อง', 'ขอรับค่าตอบแทนการตีพิมพ์บทความผลงานทางวิชาการ'),
-      { text: 'เรียน  อธิการบดีมหาวิทยาลัยราชภัฏชัยภูมิ', margin: [0, 10, 0, 8] },
+      headerRow("เรื่อง", "ขอรับค่าตอบแทนการตีพิมพ์บทความผลงานทางวิชาการ"),
+      {
+        text: "เรียน  อธิการบดีมหาวิทยาลัยราชภัฏชัยภูมิ",
+        margin: [0, 10, 0, 8],
+      },
       {
         leadingIndent: PARAGRAPH_INDENT,
         text:
-          `ข้าพเจ้า ${ownerName} ตำแหน่ง ${owner.academicPosition ?? '-'} ` +
+          `ข้าพเจ้า ${ownerName} ตำแหน่ง ${owner.academicPosition ?? "-"} ` +
           // Snapshot first (CLAUDE.md ข้อ 8): the memo must keep naming the unit
           // and subject area as they were when the request was filed, even if
           // the person transfers afterwards.
-          `สังกัด ${request.departmentName ?? owner.department?.nameTh ?? '-'} ${request.faculty.nameTh} ` +
-          'ขอรับค่าตอบแทนการตีพิมพ์บทความผลงานทางวิชาการ ตามประกาศมหาวิทยาลัยราชภัฏชัยภูมิ ' +
-          'เลขที่ 2131/2566 โดยมีรายละเอียดดังนี้',
+          `สังกัด ${request.departmentName ?? owner.department?.nameTh ?? "-"} ${request.faculty.nameTh} ` +
+          "ขอรับค่าตอบแทนการตีพิมพ์บทความผลงานทางวิชาการ ตามประกาศมหาวิทยาลัยราชภัฏชัยภูมิ " +
+          "เลขที่ 2131/2566 โดยมีรายละเอียดดังนี้",
         margin: [0, 0, 0, 10],
-        alignment: 'justify',
+        alignment: "justify",
       },
 
-      { text: '1. ข้อมูลบทความ', bold: true, margin: [0, 6, 0, 4] },
-      labelValue('ชื่อบทความ', request.articleTitle),
-      labelValue('ชื่อวารสาร', request.journalName),
-      labelValue('ปีที่ / ฉบับที่ / หน้า', [request.volume, request.issue, request.pages].filter(Boolean).join(' / ')),
-      labelValue('ISSN', request.issn ?? '-'),
-      labelValue('DOI', request.doi ?? '-'),
-      labelValue('วันที่ตีพิมพ์', formatThaiDate(request.publishedAt)),
-      labelValue('ฐานข้อมูลวารสาร', `${tier.nameTh} (${tier.databaseName})`),
-      labelValue('ประเภทการตีพิมพ์', request.fromConference ? 'คัดเลือกจาก conference' : 'ตีพิมพ์ปกติ'),
-
-      { text: '2. จำนวนเงินที่ขอรับ', bold: true, margin: [0, 10, 0, 4] },
-      labelValue('อัตราตามประกาศ', `${money(Number(request.amountRequested))} บาท`),
+      { text: "1. ข้อมูลบทความ", bold: true, margin: [0, 6, 0, 4] },
+      labelValue("ชื่อบทความ", request.articleTitle),
+      labelValue("ชื่อวารสาร", request.journalName),
       labelValue(
-        'จำนวนที่อนุมัติ',
-        request.amountApproved ? `${money(Number(request.amountApproved))} บาท` : 'รอการอนุมัติ',
+        "ปีที่ / ฉบับที่ / หน้า",
+        [request.volume, request.issue, request.pages]
+          .filter(Boolean)
+          .join(" / "),
       ),
-      labelValue('ลำดับที่ใช้สิทธิ์ในปี', request.sequenceInYear ? `${request.sequenceInYear} / 3` : '-'),
+      labelValue("ISSN", request.issn ?? "-"),
+      labelValue("DOI", request.doi ?? "-"),
+      labelValue("วันที่ตีพิมพ์", formatThaiDate(request.publishedAt)),
+      labelValue("ฐานข้อมูลวารสาร", `${tier.nameTh} (${tier.databaseName})`),
+      labelValue(
+        "ประเภทการตีพิมพ์",
+        request.fromConference ? "คัดเลือกจาก conference" : "ตีพิมพ์ปกติ",
+      ),
 
-      { text: '3. คำรับรองของผู้ขอ', bold: true, margin: [0, 10, 0, 4] },
+      { text: "2. จำนวนเงินที่ขอรับ", bold: true, margin: [0, 10, 0, 4] },
+      labelValue(
+        "อัตราตามประกาศ",
+        `${money(Number(request.amountRequested))} บาท`,
+      ),
+      labelValue(
+        "จำนวนที่อนุมัติ",
+        request.amountApproved
+          ? `${money(Number(request.amountApproved))} บาท`
+          : "รอการอนุมัติ",
+      ),
+      labelValue(
+        "ลำดับที่ใช้สิทธิ์ในปี",
+        request.sequenceInYear ? `${request.sequenceInYear} / 3` : "-",
+      ),
+
+      { text: "3. คำรับรองของผู้ขอ", bold: true, margin: [0, 10, 0, 4] },
       {
         ul: [
-          `${request.certNotOnStudyLeave ? '[/]' : '[ ]'} ข้าพเจ้าไม่ได้จัดทำบทความนี้ขณะอยู่ระหว่างการศึกษาต่อ แม้ไม่เกี่ยวกับวิทยานิพนธ์`,
-          `${request.certNotThesisPart ? '[/]' : '[ ]'} บทความนี้ไม่เป็นส่วนหนึ่งของวิทยานิพนธ์ของข้าพเจ้า`,
-          `${request.certNotDuplicate ? '[/]' : '[ ]'} บทความนี้ยังไม่เคยได้รับค่าตอบแทนหรือรางวัลที่เข้าข่ายการสนับสนุนการตีพิมพ์จากมหาวิทยาลัย`,
+          `${request.certNotOnStudyLeave ? "[/]" : "[ ]"} ข้าพเจ้าไม่ได้จัดทำบทความนี้ขณะอยู่ระหว่างการศึกษาต่อ แม้ไม่เกี่ยวกับวิทยานิพนธ์`,
+          `${request.certNotThesisPart ? "[/]" : "[ ]"} บทความนี้ไม่เป็นส่วนหนึ่งของวิทยานิพนธ์ของข้าพเจ้า`,
+          `${request.certNotDuplicate ? "[/]" : "[ ]"} บทความนี้ยังไม่เคยได้รับค่าตอบแทนหรือรางวัลที่เข้าข่ายการสนับสนุนการตีพิมพ์จากมหาวิทยาลัย`,
         ],
         margin: [10, 0, 0, 6],
       },
 
-      { text: '4. เอกสารประกอบ', bold: true, margin: [0, 10, 0, 4] },
+      { text: "4. เอกสารประกอบ", bold: true, margin: [0, 10, 0, 4] },
       {
         ul:
           request.attachments.length > 0
             ? request.attachments.map(
                 (file) =>
                   `${DOC_TYPE_LABELS[file.docType]} - ${file.fileName}` +
-                  (file.isVerified ? ' (ตรวจสอบแล้ว)' : ''),
+                  (file.isVerified ? " (ตรวจสอบแล้ว)" : ""),
               )
-            : ['ยังไม่มีเอกสารแนบ'],
+            : ["ยังไม่มีเอกสารแนบ"],
         margin: [10, 0, 0, 6],
       },
 
       {
-        text: 'จึงเรียนมาเพื่อโปรดพิจารณา',
+        text: "จึงเรียนมาเพื่อโปรดพิจารณา",
         margin: [0, 10, 0, 20],
       },
       {
         columns: [
-          { text: '', width: '*' },
+          { text: "", width: "*" },
           {
             width: 220,
             stack: [
-              { text: 'ลงชื่อ ..............................................', alignment: 'center' },
-              { text: `( ${ownerName} )`, alignment: 'center' },
-              { text: 'ผู้ขอรับค่าตอบแทน', alignment: 'center' },
+              {
+                text: "ลงชื่อ ..............................................",
+                alignment: "center",
+              },
+              { text: `( ${ownerName} )`, alignment: "center" },
+              { text: "ผู้ขอรับค่าตอบแทน", alignment: "center" },
             ],
           },
         ],
       },
 
-      { text: '5. ผลการพิจารณาตามลำดับขั้น', bold: true, margin: [0, 24, 0, 4], pageBreak: 'before' },
+      {
+        text: "5. ผลการพิจารณาตามลำดับขั้น",
+        bold: true,
+        margin: [0, 24, 0, 4],
+        pageBreak: "before",
+      },
       {
         text:
-          'ระบบบันทึกผู้ลงนามและวันเวลาไว้ในฐานข้อมูล (ตาราง request_approvals) ' +
-          'เอกสารฉบับนี้พิมพ์จากระบบเพื่อใช้ประกอบการเบิกจ่าย',
+          "ระบบบันทึกผู้ลงนามและวันเวลาไว้ในฐานข้อมูล (ตาราง request_approvals) " +
+          "เอกสารฉบับนี้พิมพ์จากระบบเพื่อใช้ประกอบการเบิกจ่าย",
         fontSize: SIZE.small,
         italics: true,
         margin: [0, 0, 0, 8],
@@ -331,9 +388,9 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
         ? [
             {
               text:
-                `การเบิกจ่าย: ฎีกาเลขที่ ${request.payment.voucherNo ?? '-'} ` +
+                `การเบิกจ่าย: ฎีกาเลขที่ ${request.payment.voucherNo ?? "-"} ` +
                 `จำนวน ${money(Number(request.payment.amount))} บาท ` +
-                `วันที่ ${request.payment.paidAt ? formatThaiDate(request.payment.paidAt) : '-'}`,
+                `วันที่ ${request.payment.paidAt ? formatThaiDate(request.payment.paidAt) : "-"}`,
               margin: [0, 4, 0, 0],
             } as Content,
           ]
@@ -348,12 +405,202 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
         },
         {
           text: `หน้า ${currentPage} / ${pageCount}`,
-          alignment: 'right',
+          alignment: "right",
           fontSize: SIZE.small,
           margin: [0, 0, MARGINS[2], 0],
         },
       ],
     }),
+  };
+
+  const doc = pdfPrinter.createPdfKitDocument(definition);
+  doc.end();
+  return doc;
+}
+
+/**
+ * Renders ใบสำคัญรับเงิน - the receipt the claimant signs to acknowledge the
+ * money, which the finance office needs alongside the memo.
+ *
+ * The layout follows the university's own form, photographed from a filled copy
+ * and from the Word mail-merge master (CLAUDE.md section 18.4). Fields the paper
+ * leaves blank for a pen - the date, the claimant's address, the finance
+ * officer's signature and the voucher's running number - are left blank here
+ * too: they are either written at the counter or issued by กองคลัง, and the
+ * database holds none of them.
+ */
+export function buildReceiptVoucher(
+  request: RequestDetail,
+): NodeJS.ReadableStream {
+  const pdfPrinter = getPrinter();
+
+  if (request.amountApproved === null) {
+    throw new AppError(
+      422,
+      "RECEIPT_NOT_APPROVED",
+      "ออกใบสำคัญรับเงินได้เฉพาะคำขอที่อนุมัติแล้ว เพราะต้องระบุจำนวนเงินที่อนุมัติ",
+    );
+  }
+
+  const owner = request.owner;
+  const ownerName = `${owner.prefix ?? ""}${owner.firstName} ${owner.lastName}`;
+  const amount = Number(request.amountApproved);
+
+  /** "ปีที่ 4 ฉบับที่ 2 (พฤษภาคม-สิงหาคม 2569), e3781" - whichever parts exist. */
+  const issueLine = [
+    request.volume ? `ปีที่ ${request.volume}` : null,
+    request.issue ? `ฉบับที่ ${request.issue}` : null,
+    request.issuePeriod ? `(${request.issuePeriod})` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const issueText = [issueLine, request.pages].filter(Boolean).join(", ");
+
+  const issnText = [
+    request.issn ? `pISSN: ${request.issn}` : null,
+    request.issnElectronic ? `eISSN: ${request.issnElectronic}` : null,
+  ]
+    .filter(Boolean)
+    .join("  ");
+
+  /** A label and its value on one line, the way the paper form sets them. */
+  const itemLine = (label: string, value: string): Content => ({
+    columns: [
+      { text: label, width: "auto", bold: true, decoration: "underline" },
+      { text: value || "-", width: "*", margin: [8, 0, 0, 0] },
+    ],
+    margin: [0, 2, 0, 0],
+  });
+
+  /** A run of dots to write on, which is how the paper form marks a blank. */
+  const blank = (length: number) => ".".repeat(length);
+
+  const definition: TDocumentDefinitions = {
+    pageSize: "A4",
+    pageMargins: MARGINS,
+    defaultStyle: { font: "THSarabun", fontSize: SIZE.body, lineHeight: 1.25 },
+    content: [
+      { text: "ที่  มหาวิทยาลัยราชภัฏชัยภูมิ", alignment: "right" },
+      {
+        text: "ใบสำคัญรับเงิน",
+        alignment: "center",
+        bold: true,
+        fontSize: SIZE.headerLabel,
+        margin: [0, 6, 0, 10],
+      },
+      {
+        text: `วันที่ ${blank(12)} เดือน ${blank(20)} พ.ศ. ${blank(10)}`,
+        alignment: "right",
+        margin: [0, 0, 0, 8],
+      },
+      {
+        text:
+          `ข้าพเจ้า  ${ownerName}  อยู่บ้านเลขที่ ${blank(14)} หมู่ ${blank(8)}\n` +
+          `แขวง/ตำบล ${blank(20)} เขต/อำเภอ ${blank(20)} จังหวัด ${blank(20)}`,
+      },
+      {
+        text: "ได้รับเงินจาก มหาวิทยาลัยราชภัฏชัยภูมิ ดังรายการต่อไปนี้",
+        margin: [0, 2, 0, 8],
+      },
+      {
+        table: {
+          widths: ["*", 70, 40],
+          body: [
+            [
+              {
+                text: "รายการ",
+                alignment: "center",
+                bold: true,
+                rowSpan: 2,
+                margin: [0, 8, 0, 0],
+              },
+              {
+                text: "จำนวนเงิน",
+                alignment: "center",
+                bold: true,
+                colSpan: 2,
+              },
+              {},
+            ],
+            [
+              {},
+              { text: "บาท", alignment: "center" },
+              { text: "สต.", alignment: "center" },
+            ],
+            [
+              {
+                margin: [2, 4, 2, 10],
+                stack: [
+                  { text: "ค่าตอบแทนการตีพิมพ์บทความผลงานทางวิชาการ" },
+                  itemLine("ชื่อบทความ", request.articleTitle),
+                  itemLine("วารสาร", request.journalName),
+                  itemLine("ฐานข้อมูลที่ตีพิมพ์", request.journalTier.nameTh),
+                  itemLine("ฉบับ/ครั้งที่", issueText),
+                  itemLine("ISSN", issnText),
+                ],
+              },
+              {
+                text: money(amount).replace(/\.\d+$/, ""),
+                alignment: "center",
+                margin: [0, 40, 0, 0],
+              },
+              { text: "", alignment: "center" },
+            ],
+            [
+              { text: "รวมทั้งสิ้น", alignment: "right", bold: true },
+              {
+                text: money(amount).replace(/\.\d+$/, ""),
+                alignment: "center",
+                bold: true,
+              },
+              { text: "-", alignment: "center" },
+            ],
+          ],
+        },
+      },
+      {
+        text: `จำนวนเงิน  (ตัวอักษร)  (....${bahtText(amount)}.....)`,
+        margin: [0, 14, 0, 30],
+      },
+      {
+        columns: [
+          { text: "", width: "*" },
+          {
+            width: 260,
+            stack: [
+              { text: `(ลงชื่อ)${blank(34)}ผู้รับเงิน` },
+              {
+                text: `( ${ownerName} )`,
+                alignment: "center",
+                margin: [0, 0, 40, 0],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        columns: [
+          { text: "", width: "*" },
+          {
+            width: 260,
+            stack: [
+              { text: `(ลงชื่อ)${blank(34)}ผู้จ่ายเงิน` },
+              {
+                text: "(                                        )",
+                alignment: "center",
+                margin: [0, 0, 40, 0],
+              },
+            ],
+          },
+        ],
+        margin: [0, 26, 0, 0],
+      },
+      {
+        text: `ลำดับ${blank(8)}`,
+        alignment: "right",
+        margin: [0, 40, 0, 0],
+      },
+    ],
   };
 
   const doc = pdfPrinter.createPdfKitDocument(definition);

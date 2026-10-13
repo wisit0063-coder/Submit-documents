@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
-import { DOC_TYPE_LABELS, REQUIRED_DOC_TYPES, formatMoney, toDateInput } from '@/lib/format';
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import {
+  DOC_TYPE_LABELS,
+  REQUIRED_DOC_TYPES,
+  formatMoney,
+  toDateInput,
+} from "@/lib/format";
 import {
   Alert,
   Button,
@@ -16,10 +21,10 @@ import {
   Select,
   Spinner,
   useToast,
-} from '@/components/ui';
-import { AttachmentPanel } from '@/components/AttachmentPanel';
-import { ForbiddenPage } from '@/pages/NotFoundPage';
-import type { JournalTier, RequestDetail } from '@/types';
+} from "@/components/ui";
+import { AttachmentPanel } from "@/components/AttachmentPanel";
+import { ForbiddenPage } from "@/pages/NotFoundPage";
+import type { JournalTier, RequestDetail } from "@/types";
 
 interface FormState {
   articleTitle: string;
@@ -28,6 +33,8 @@ interface FormState {
   issue: string;
   pages: string;
   issn: string;
+  issnElectronic: string;
+  issuePeriod: string;
   doi: string;
   articleUrl: string;
   publishedAt: string;
@@ -39,16 +46,18 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  articleTitle: '',
-  journalName: '',
-  volume: '',
-  issue: '',
-  pages: '',
-  issn: '',
-  doi: '',
-  articleUrl: '',
-  publishedAt: '',
-  journalTierId: '',
+  articleTitle: "",
+  journalName: "",
+  volume: "",
+  issue: "",
+  pages: "",
+  issn: "",
+  issnElectronic: "",
+  issuePeriod: "",
+  doi: "",
+  articleUrl: "",
+  publishedAt: "",
+  journalTierId: "",
   fromConference: false,
   certNotOnStudyLeave: false,
   certNotThesisPart: false,
@@ -72,8 +81,8 @@ export function RequestFormPage() {
     isError: tiersFailed,
     refetch: refetchTiers,
   } = useQuery({
-    queryKey: ['journal-tiers'],
-    queryFn: () => api.get<JournalTier[]>('/journal-tiers'),
+    queryKey: ["journal-tiers"],
+    queryFn: () => api.get<JournalTier[]>("/journal-tiers"),
     staleTime: 30 * 60_000,
   });
 
@@ -84,7 +93,7 @@ export function RequestFormPage() {
     error: existingError,
     refetch: refetchExisting,
   } = useQuery({
-    queryKey: ['request', id],
+    queryKey: ["request", id],
     queryFn: () => api.get<RequestDetail>(`/requests/${id}`),
     enabled: isEdit,
   });
@@ -94,12 +103,14 @@ export function RequestFormPage() {
     setForm({
       articleTitle: existing.articleTitle,
       journalName: existing.journalName,
-      volume: existing.volume ?? '',
-      issue: existing.issue ?? '',
-      pages: existing.pages ?? '',
-      issn: existing.issn ?? '',
-      doi: existing.doi ?? '',
-      articleUrl: existing.articleUrl ?? '',
+      volume: existing.volume ?? "",
+      issue: existing.issue ?? "",
+      pages: existing.pages ?? "",
+      issn: existing.issn ?? "",
+      issnElectronic: existing.issnElectronic ?? "",
+      issuePeriod: existing.issuePeriod ?? "",
+      doi: existing.doi ?? "",
+      articleUrl: existing.articleUrl ?? "",
       publishedAt: toDateInput(existing.publishedAt),
       journalTierId: existing.journalTier.id,
       fromConference: existing.fromConference,
@@ -134,16 +145,23 @@ export function RequestFormPage() {
         issue: form.issue || null,
         pages: form.pages || null,
         issn: form.issn || null,
+        issnElectronic: form.issnElectronic || null,
+        issuePeriod: form.issuePeriod || null,
         doi: form.doi || null,
         articleUrl: form.articleUrl || null,
       };
       if (isEdit) return api.put<RequestDetail>(`/requests/${id}`, payload);
-      return api.post<RequestDetail>('/requests', payload);
+      return api.post<RequestDetail>("/requests", payload);
     },
     onSuccess: async (saved) => {
-      await queryClient.invalidateQueries({ queryKey: ['requests'] });
-      await queryClient.invalidateQueries({ queryKey: ['request', String(saved.id)] });
-      toast.push('success', isEdit ? 'บันทึกการแก้ไขแล้ว' : 'บันทึกคำขอฉบับร่างแล้ว');
+      await queryClient.invalidateQueries({ queryKey: ["requests"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["request", String(saved.id)],
+      });
+      toast.push(
+        "success",
+        isEdit ? "บันทึกการแก้ไขแล้ว" : "บันทึกคำขอฉบับร่างแล้ว",
+      );
       navigate(`/requests/${saved.id}`);
     },
     onError: (caught) => {
@@ -151,9 +169,9 @@ export function RequestFormPage() {
         setFieldErrors(caught.fieldErrors);
         setError(caught.message);
       } else {
-        setError('บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+        setError("บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
       }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     },
   });
 
@@ -169,9 +187,15 @@ export function RequestFormPage() {
   if (isEdit && existingFailed) {
     return (
       <div className="py-10">
-        <ErrorState error={existingError} onRetry={() => void refetchExisting()} />
+        <ErrorState
+          error={existingError}
+          onRetry={() => void refetchExisting()}
+        />
         <div className="mt-4 text-center">
-          <Link to="/requests" className="text-sm text-brand-700 hover:underline">
+          <Link
+            to="/requests"
+            className="text-sm text-brand-700 hover:underline"
+          >
             กลับไปหน้ารายการคำขอ
           </Link>
         </div>
@@ -195,15 +219,20 @@ export function RequestFormPage() {
     return <ForbiddenPage />;
   }
 
-  const locked = isEdit && existing && !['DRAFT', 'RETURNED'].includes(existing.status);
+  const locked =
+    isEdit && existing && !["DRAFT", "RETURNED"].includes(existing.status);
 
   return (
     <>
       <PageHeader
-        title={isEdit ? `แก้ไขคำขอ ${existing?.requestNo ?? ''}` : 'ยื่นคำขอรับค่าตอบแทนการตีพิมพ์'}
+        title={
+          isEdit
+            ? `แก้ไขคำขอ ${existing?.requestNo ?? ""}`
+            : "ยื่นคำขอรับค่าตอบแทนการตีพิมพ์"
+        }
         description="กรอกข้อมูลตามแบบฟอร์ม CPRU-RDI-F011 ระบบจะบันทึกเป็นฉบับร่างก่อน แล้วจึงกดส่งในหน้ารายละเอียด"
         action={
-          <Link to={isEdit ? `/requests/${id}` : '/requests'}>
+          <Link to={isEdit ? `/requests/${id}` : "/requests"}>
             <Button variant="outline">ยกเลิก</Button>
           </Link>
         }
@@ -229,7 +258,7 @@ export function RequestFormPage() {
             <Field label="ชื่อบทความ" required error={fieldErrors.articleTitle}>
               <Input
                 value={form.articleTitle}
-                onChange={(event) => set('articleTitle', event.target.value)}
+                onChange={(event) => set("articleTitle", event.target.value)}
                 invalid={Boolean(fieldErrors.articleTitle)}
                 placeholder="ชื่อบทความตามที่ปรากฏในวารสาร"
                 required
@@ -240,7 +269,7 @@ export function RequestFormPage() {
             <Field label="ชื่อวารสาร" required error={fieldErrors.journalName}>
               <Input
                 value={form.journalName}
-                onChange={(event) => set('journalName', event.target.value)}
+                onChange={(event) => set("journalName", event.target.value)}
                 invalid={Boolean(fieldErrors.journalName)}
                 required
                 disabled={locked}
@@ -249,31 +278,72 @@ export function RequestFormPage() {
 
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="ปีที่ (Volume)" error={fieldErrors.volume}>
-                <Input value={form.volume} onChange={(e) => set('volume', e.target.value)} disabled={locked} />
+                <Input
+                  value={form.volume}
+                  onChange={(e) => set("volume", e.target.value)}
+                  disabled={locked}
+                />
               </Field>
               <Field label="ฉบับที่ (Issue)" error={fieldErrors.issue}>
-                <Input value={form.issue} onChange={(e) => set('issue', e.target.value)} disabled={locked} />
+                <Input
+                  value={form.issue}
+                  onChange={(e) => set("issue", e.target.value)}
+                  disabled={locked}
+                />
               </Field>
               <Field label="เลขหน้า/รหัสบทความ" error={fieldErrors.pages}>
                 <Input
                   value={form.pages}
-                  onChange={(e) => set('pages', e.target.value)}
+                  onChange={(e) => set("pages", e.target.value)}
                   placeholder="เช่น 125-138"
                   disabled={locked}
                 />
               </Field>
             </div>
 
+            <Field
+              label="ฉบับ/ช่วงที่เผยแพร่ตามหน้าปกวารสาร"
+              hint="คัดลอกตามที่วารสารเขียนไว้ เช่น พฤษภาคม-สิงหาคม 2569 · ใช้พิมพ์ลงใบสำคัญรับเงิน ไม่ได้ใช้คิดสิทธิ์"
+              error={fieldErrors.issuePeriod}
+            >
+              <Input
+                value={form.issuePeriod}
+                onChange={(e) => set("issuePeriod", e.target.value)}
+                placeholder="พฤษภาคม-สิงหาคม 2569"
+                disabled={locked}
+              />
+            </Field>
+
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="ISSN" hint="รูปแบบ xxxx-xxxx" error={fieldErrors.issn}>
+              <Field
+                label="ISSN (ฉบับพิมพ์)"
+                hint="รูปแบบ xxxx-xxxx"
+                error={fieldErrors.issn}
+              >
                 <Input
                   value={form.issn}
-                  onChange={(e) => set('issn', e.target.value)}
+                  onChange={(e) => set("issn", e.target.value)}
                   invalid={Boolean(fieldErrors.issn)}
                   placeholder="1234-5678"
                   disabled={locked}
                 />
               </Field>
+              <Field
+                label="e-ISSN (ฉบับออนไลน์)"
+                hint="วารสารส่วนใหญ่มีสองเลข ใบสำคัญรับเงินพิมพ์ทั้งคู่"
+                error={fieldErrors.issnElectronic}
+              >
+                <Input
+                  value={form.issnElectronic}
+                  onChange={(e) => set("issnElectronic", e.target.value)}
+                  invalid={Boolean(fieldErrors.issnElectronic)}
+                  placeholder="2822-0889"
+                  disabled={locked}
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 label="DOI"
                 hint="ใช้ตรวจสอบการเบิกซ้ำ หากไม่มี DOI ระบบจะใช้ ISSN คู่กับชื่อบทความแทน"
@@ -281,7 +351,7 @@ export function RequestFormPage() {
               >
                 <Input
                   value={form.doi}
-                  onChange={(e) => set('doi', e.target.value)}
+                  onChange={(e) => set("doi", e.target.value)}
                   placeholder="10.1000/xyz123"
                   disabled={locked}
                 />
@@ -293,7 +363,7 @@ export function RequestFormPage() {
                 <Input
                   type="url"
                   value={form.articleUrl}
-                  onChange={(e) => set('articleUrl', e.target.value)}
+                  onChange={(e) => set("articleUrl", e.target.value)}
                   invalid={Boolean(fieldErrors.articleUrl)}
                   placeholder="https://"
                   disabled={locked}
@@ -308,7 +378,7 @@ export function RequestFormPage() {
                 <Input
                   type="date"
                   value={form.publishedAt}
-                  onChange={(e) => set('publishedAt', e.target.value)}
+                  onChange={(e) => set("publishedAt", e.target.value)}
                   invalid={Boolean(fieldErrors.publishedAt)}
                   required
                   disabled={locked}
@@ -333,12 +403,14 @@ export function RequestFormPage() {
               label="ฐานข้อมูลวารสาร"
               required
               error={
-                tiersFailed ? 'โหลดรายการฐานข้อมูลวารสารไม่สำเร็จ' : fieldErrors.journalTierId
+                tiersFailed
+                  ? "โหลดรายการฐานข้อมูลวารสารไม่สำเร็จ"
+                  : fieldErrors.journalTierId
               }
             >
               <Select
                 value={form.journalTierId}
-                onChange={(e) => set('journalTierId', e.target.value)}
+                onChange={(e) => set("journalTierId", e.target.value)}
                 invalid={Boolean(fieldErrors.journalTierId)}
                 required
                 disabled={locked}
@@ -365,7 +437,7 @@ export function RequestFormPage() {
               <div className="flex h-10 items-center">
                 <Checkbox
                   checked={form.fromConference}
-                  onChange={(e) => set('fromConference', e.target.checked)}
+                  onChange={(e) => set("fromConference", e.target.checked)}
                   disabled={locked}
                   label="บทความคัดเลือกจากการประชุมวิชาการ (conference)"
                 />
@@ -374,9 +446,13 @@ export function RequestFormPage() {
           </div>
 
           <div className="mt-4 rounded-lg bg-brand-50 px-4 py-3 ring-1 ring-inset ring-brand-100">
-            <p className="text-sm text-brand-900">จำนวนเงินที่ขอรับตามอัตราในประกาศ</p>
+            <p className="text-sm text-brand-900">
+              จำนวนเงินที่ขอรับตามอัตราในประกาศ
+            </p>
             <p className="mt-0.5 text-2xl font-bold tabular-nums text-brand-800">
-              {amount !== null ? formatMoney(amount) : 'เลือกฐานข้อมูลเพื่อคำนวณ'}
+              {amount !== null
+                ? formatMoney(amount)
+                : "เลือกฐานข้อมูลเพื่อคำนวณ"}
             </p>
             {selectedTier?.announcementRef && (
               <p className="mt-1 text-xs text-brand-700">
@@ -393,19 +469,19 @@ export function RequestFormPage() {
           <div className="space-y-3">
             <Checkbox
               checked={form.certNotOnStudyLeave}
-              onChange={(e) => set('certNotOnStudyLeave', e.target.checked)}
+              onChange={(e) => set("certNotOnStudyLeave", e.target.checked)}
               disabled={locked}
               label="บทความนี้ไม่ได้เกิดขึ้นขณะข้าพเจ้าอยู่ระหว่างการศึกษาต่อ แม้ไม่เกี่ยวกับวิทยานิพนธ์"
             />
             <Checkbox
               checked={form.certNotThesisPart}
-              onChange={(e) => set('certNotThesisPart', e.target.checked)}
+              onChange={(e) => set("certNotThesisPart", e.target.checked)}
               disabled={locked}
               label="บทความนี้ไม่เป็นส่วนหนึ่งของวิทยานิพนธ์หรือการศึกษาของข้าพเจ้า"
             />
             <Checkbox
               checked={form.certNotDuplicate}
-              onChange={(e) => set('certNotDuplicate', e.target.checked)}
+              onChange={(e) => set("certNotDuplicate", e.target.checked)}
               disabled={locked}
               label="บทความนี้ยังไม่เคยได้รับค่าตอบแทนหรือรางวัลที่เข้าข่ายการสนับสนุนการตีพิมพ์จากมหาวิทยาลัย"
             />
@@ -422,20 +498,26 @@ export function RequestFormPage() {
         ) : (
           <Card title="4. เอกสารแนบ">
             <Alert tone="info">
-              บันทึกคำขอฉบับร่างก่อน จากนั้นระบบจะเปิดให้แนบเอกสาร{' '}
-              {REQUIRED_DOC_TYPES.map((type) => DOC_TYPE_LABELS[type]).join(' · ')}
+              บันทึกคำขอฉบับร่างก่อน จากนั้นระบบจะเปิดให้แนบเอกสาร{" "}
+              {REQUIRED_DOC_TYPES.map((type) => DOC_TYPE_LABELS[type]).join(
+                " · ",
+              )}
             </Alert>
           </Card>
         )}
 
         <div className="flex justify-end gap-2 pb-6">
-          <Link to={isEdit ? `/requests/${id}` : '/requests'}>
+          <Link to={isEdit ? `/requests/${id}` : "/requests"}>
             <Button type="button" variant="outline">
               ยกเลิก
             </Button>
           </Link>
-          <Button type="submit" loading={save.isPending} disabled={Boolean(locked)}>
-            {isEdit ? 'บันทึกการแก้ไข' : 'บันทึกฉบับร่าง'}
+          <Button
+            type="submit"
+            loading={save.isPending}
+            disabled={Boolean(locked)}
+          >
+            {isEdit ? "บันทึกการแก้ไข" : "บันทึกฉบับร่าง"}
           </Button>
         </div>
       </form>

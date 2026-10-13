@@ -266,7 +266,15 @@ model Request {
   volume       String?  @db.VarChar(50)
   issue        String?  @db.VarChar(50)
   pages        String?  @db.VarChar(50)
-  issn         String?  @db.VarChar(20)
+  issn         String?  @db.VarChar(20) // pISSN - ฉบับพิมพ์
+  /// e-ISSN. The receipt voucher (ใบสำคัญรับเงิน) prints both numbers when a
+  /// journal has both, so one column cannot hold what that form asks for.
+  issnElectronic String? @map("issn_electronic") @db.VarChar(20)
+  /// The coverage the journal prints on its own cover, e.g.
+  /// "พฤษภาคม-สิงหาคม 2569". Most TCI journals publish per half-year, and the
+  /// voucher quotes that range beside the volume and issue. Display only - the
+  /// December grace period is still decided from published_at (CLAUDE.md 6).
+  issuePeriod    String? @map("issue_period") @db.VarChar(120)
   doi          String?  @db.VarChar(255)
   articleUrl   String?  @map("article_url") @db.Text
   publishedAt  DateTime @map("published_at") @db.Date
