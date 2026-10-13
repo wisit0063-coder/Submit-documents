@@ -39,6 +39,26 @@ export const registerSchema = z
       .optional()
       .nullable()
       .transform((value) => value || null),
+    // Both documents the system prints carry the claimant's title: the memo
+    // writes "ข้าพเจ้า <คำนำหน้า><ชื่อ> ตำแหน่ง <ตำแหน่งทางวิชาการ>" and the receipt
+    // voucher repeats the name under the signature line. Form CPRU-RDI-F011 has
+    // the claimant fill in both themselves (section 1), and the reviewers who
+    // sign below are what confirms them - so the form asks for them here rather
+    // than leaving every self-registered claimant printing a bare name.
+    prefix: z
+      .string()
+      .trim()
+      .min(1, 'กรุณากรอกคำนำหน้าชื่อ')
+      .max(50, 'คำนำหน้าชื่อยาวเกินไป'),
+    // Optional on purpose: support staff may claim too (ข้อ 13.9 Q3) and most
+    // hold no academic position. Requiring it would only produce invented ones.
+    academicPosition: z
+      .string()
+      .trim()
+      .max(150, 'ตำแหน่งทางวิชาการยาวเกินไป')
+      .optional()
+      .nullable()
+      .transform((value) => value || null),
     firstName: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(150),
     lastName: z.string().trim().min(1, 'กรุณากรอกนามสกุล').max(150),
     phone: phoneSchema,

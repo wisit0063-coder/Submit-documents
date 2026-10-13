@@ -19,6 +19,16 @@ export const registerFormSchema = z
       .max(255, 'ชื่อสาขาวิชายาวเกินไป')
       .nullable()
       .transform((value) => value || null),
+    // Printed on both documents, so the claimant fills them in as they do on
+    // form CPRU-RDI-F011. The academic position is optional: support staff
+    // claim too and most hold none.
+    prefix: z.string().trim().min(1, 'กรุณากรอกคำนำหน้าชื่อ').max(50, 'คำนำหน้าชื่อยาวเกินไป'),
+    academicPosition: z
+      .string()
+      .trim()
+      .max(150, 'ตำแหน่งทางวิชาการยาวเกินไป')
+      .nullable()
+      .transform((value) => value || null),
     firstName: z.string().trim().min(1, 'กรุณากรอกชื่อ').max(150),
     lastName: z.string().trim().min(1, 'กรุณากรอกนามสกุล').max(150),
     phone: z
@@ -45,6 +55,8 @@ export type RegisterForm = {
   facultyId: string;
   staffTrack: StaffTrack | '';
   departmentName: string;
+  prefix: string;
+  academicPosition: string;
   firstName: string;
   lastName: string;
   phone: string;

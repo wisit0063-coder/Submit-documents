@@ -71,6 +71,8 @@ export async function register(input: RegisterInput) {
     passwordHash: await hashPassword(input.password),
     // The applicant chose this password themselves; no forced change later.
     mustChangePassword: false,
+    prefix: input.prefix,
+    academicPosition: input.academicPosition,
     firstName: input.firstName,
     lastName: input.lastName,
     phoneMobile: input.phone,

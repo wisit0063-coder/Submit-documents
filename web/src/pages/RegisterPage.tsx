@@ -14,6 +14,8 @@ const EMPTY_FORM: RegisterForm = {
   facultyId: '',
   staffTrack: '',
   departmentName: '',
+  prefix: '',
+  academicPosition: '',
   firstName: '',
   lastName: '',
   phone: '',
@@ -264,6 +266,36 @@ export function RegisterPage() {
           </Section>
 
           <Section number={2} title="ข้อมูลผู้สมัคร">
+            {/* Both printed documents carry the title: the memo writes it after
+                ข้าพเจ้า, and the receipt voucher repeats the name under the
+                signature line. Form CPRU-RDI-F011 has the claimant write both. */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="คำนำหน้าชื่อ"
+                required
+                hint="เช่น นาย · นาง · นางสาว · อาจารย์ ดร. · ผศ.ดร."
+                error={errors.prefix}
+              >
+                <Input
+                  value={form.prefix}
+                  onChange={(event) => set('prefix', event.target.value)}
+                  invalid={Boolean(errors.prefix)}
+                  autoComplete="honorific-prefix"
+                />
+              </Field>
+              <Field
+                label="ตำแหน่งทางวิชาการ"
+                hint="ไม่บังคับ · สายสนับสนุนเว้นว่างได้"
+                error={errors.academicPosition}
+              >
+                <Input
+                  value={form.academicPosition}
+                  onChange={(event) => set('academicPosition', event.target.value)}
+                  invalid={Boolean(errors.academicPosition)}
+                  placeholder="เช่น ผู้ช่วยศาสตราจารย์"
+                />
+              </Field>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="ชื่อ" required error={errors.firstName}>
                 <Input

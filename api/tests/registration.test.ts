@@ -9,6 +9,8 @@ function validInput(overrides: Record<string, unknown> = {}) {
     facultyId: '2',
     staffTrack: 'ACADEMIC',
     departmentName: null,
+    prefix: 'นางสาว',
+    academicPosition: null,
     firstName: 'สมหญิง',
     lastName: 'ใจงาม',
     phone: '081-234-5678',
@@ -127,4 +129,44 @@ test('the rate limiter allows the quota, then blocks, then resets', () => {
 
   // A new window opens once the old one expires.
   assert.equal(limiter.consume('10.0.0.1', start + 60_001), true);
+});
+
+/**
+ * Both printed documents carry the claimant's title - the memo writes
+ * "ข้าพเจ้า <คำนำหน้า><ชื่อ> ตำแหน่ง <ตำแหน่ง>" and the receipt voucher repeats the
+ * name under the signature line - and form CPRU-RDI-F011 has the claimant fill
+ * in both themselves. Until this was asked for, every self-registered claimant
+ * printed a bare name and a dash.
+ */
+test('the title prefix is required, as it is on the paper form', () => {
+  assert.deepEqual(fieldErrors(validInput({ prefix: 'ผศ.ดร.' })), {});
+  assert.equal(fieldErrors(validInput({ prefix: '' })).prefix, 'กรุณากรอกคำนำหน้าชื่อ');
+  assert.equal(fieldErrors(validInput({ prefix: '   ' })).prefix, 'กรุณากรอกคำนำหน้าชื่อ');
+  const { prefix, ...withoutPrefix } = validInput();
+  assert.equal(prefix, 'นางสาว');
+  assert.ok(fieldErrors(withoutPrefix).prefix, 'ไม่ส่งคำนำหน้ามาเลยต้องไม่ผ่าน');
+  assert.ok(fieldErrors(validInput({ prefix: 'ก'.repeat(51) })).prefix);
+});
+
+test('the academic position is optional, because support staff claim too', () => {
+  // Q3 in section 13.9: both tracks may claim, and support staff hold no
+  // academic position. Requiring one would only produce invented titles.
+  const { academicPosition, ...withoutPosition } = validInput();
+  assert.equal(academicPosition, null);
+  for (const value of [undefined, null, '', '   ']) {
+    const result = registerSchema.safeParse(
+      value === undefined ? withoutPosition : validInput({ academicPosition: value }),
+    );
+    assert.ok(result.success, `ค่า ${JSON.stringify(value)} ต้องผ่าน`);
+    if (result.success) assert.equal(result.data.academicPosition, null);
+  }
+});
+
+test('a typed academic position is kept, trimmed', () => {
+  const result = registerSchema.safeParse(
+    validInput({ academicPosition: '  ผู้ช่วยศาสตราจารย์  ' }),
+  );
+  assert.ok(result.success);
+  if (result.success) assert.equal(result.data.academicPosition, 'ผู้ช่วยศาสตราจารย์');
+  assert.ok(fieldErrors(validInput({ academicPosition: 'ก'.repeat(151) })).academicPosition);
 });

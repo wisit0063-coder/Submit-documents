@@ -3,3 +3,5 @@ dist/
 .env
 *.log
 files.zip
+# Local Claude Code settings (personal, may contain machine paths)
+.claude/settings.local.json
