@@ -1,29 +1,30 @@
 export type RequestStatus =
-  | 'DRAFT'
-  | 'FACULTY_REVIEW'
-  | 'DEAN_REVIEW'
-  | 'RDI_REVIEW'
-  | 'RETURNED'
-  | 'ACADEMIC_OFFICE_REVIEW'
-  | 'COMMITTEE_REVIEW'
-  | 'PENDING_APPROVAL'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'PAID'
-  | 'CANCELLED'
-  | 'REFUNDED';
+  | "DRAFT"
+  | "FACULTY_REVIEW"
+  | "DEAN_REVIEW"
+  | "RDI_REVIEW"
+  | "RETURNED"
+  | "ACADEMIC_OFFICE_REVIEW"
+  | "COMMITTEE_REVIEW"
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "PAID"
+  | "CANCELLED"
+  | "REFUNDED";
 
 export type RoleCode =
-  | 'RESEARCHER'
-  | 'FACULTY_QA'
-  | 'DEAN'
-  | 'RDI_OFFICER'
-  | 'ACADEMIC_OFFICE'
-  | 'APPROVER'
-  | 'FINANCE'
-  | 'ADMIN';
+  | "RESEARCHER"
+  | "FACULTY_QA"
+  | "DEAN"
+  | "RDI_OFFICER"
+  | "ACADEMIC_OFFICE"
+  | "APPROVER"
+  | "FINANCE"
+  | "ADMIN";
 
-export type DocType = 'ACCEPTANCE_LETTER' | 'ARTICLE_COPY' | 'DATABASE_PROOF' | 'ADDITIONAL';
+export type DocType =
+  "ACCEPTANCE_LETTER" | "ARTICLE_COPY" | "DATABASE_PROOF" | "ADDITIONAL";
 
 export interface AuthUser {
   id: string;
@@ -83,7 +84,11 @@ export interface PersonRef {
   email?: string;
   phoneMobile?: string | null;
   phoneInternal?: string | null;
-  department?: { id: string; nameTh: string; faculty: { id: string; nameTh: string } } | null;
+  department?: {
+    id: string;
+    nameTh: string;
+    faculty: { id: string; nameTh: string };
+  } | null;
 }
 
 export interface Attachment {
@@ -103,7 +108,7 @@ export interface Approval {
   id: string;
   stepOrder: number;
   stepCode: string;
-  decision: 'PENDING' | 'APPROVED' | 'RETURNED' | 'REJECTED';
+  decision: "PENDING" | "APPROVED" | "RETURNED" | "REJECTED";
   comment: string | null;
   missingDocuments: string | null;
   amountApproved: number | null;
@@ -140,7 +145,7 @@ export interface Payment {
  * the unit can follow its own paperwork, but the amounts arrive as null and the
  * detail page refuses to open it.
  */
-export type ViewScope = 'OWNER' | 'FULL' | 'SUMMARY';
+export type ViewScope = "OWNER" | "FULL" | "SUMMARY";
 
 export interface RequestSummary {
   id: string;
@@ -174,6 +179,12 @@ export interface RequestDetail extends RequestSummary {
   userId: string;
   facultyId: string;
   departmentId: string;
+  /**
+   * The department name as it stood when the request was filed - a snapshot,
+   * like facultyId. The owner account may carry none, because the field is free
+   * text at registration and only an admin links a departments row later.
+   */
+  departmentName: string | null;
   volume: string | null;
   issue: string | null;
   pages: string | null;
@@ -231,7 +242,7 @@ export interface BudgetYear extends BudgetSummary {
 /** One line of the change history of a fund year, newest first. */
 export interface BudgetYearLog {
   id: string;
-  action: 'CREATE' | 'UPDATE';
+  action: "CREATE" | "UPDATE";
   // The name as it stood when the change was made, not the account's name now.
   actorName: string;
   previousAmount: number | null;
@@ -249,8 +260,8 @@ export interface Paged<T> {
   pageSize: number;
 }
 
-export type StaffTrack = 'ACADEMIC' | 'SUPPORT';
-export type RegistrationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type StaffTrack = "ACADEMIC" | "SUPPORT";
+export type RegistrationStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 /** A self-registered account as the admin review screen sees it. */
 export interface Registration {
@@ -296,6 +307,14 @@ export interface UserRow {
   registrationStatus: RegistrationStatus | null;
   departmentName: string | null;
   faculty: { id: string; nameTh: string } | null;
-  department: { id: string; nameTh: string; faculty: { id: string; nameTh: string } } | null;
-  userRoles: { id: string; facultyId: string | null; role: { id: string; code: RoleCode; nameTh: string } }[];
+  department: {
+    id: string;
+    nameTh: string;
+    faculty: { id: string; nameTh: string };
+  } | null;
+  userRoles: {
+    id: string;
+    facultyId: string | null;
+    role: { id: string; code: RoleCode; nameTh: string };
+  }[];
 }
