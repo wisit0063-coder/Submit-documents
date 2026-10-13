@@ -1,6 +1,7 @@
 import { ApprovalDecision, Prisma, RequestStatus } from '@prisma/client';
 import { prisma, type Tx } from '../config/prisma';
 import type { AuthUser } from '../middleware/auth';
+import { canSeeRequest } from '../config/authz';
 import {
   CANCELLABLE_STATUSES,
   EDITABLE_STATUSES,
@@ -142,35 +143,15 @@ export async function writeStatusLog(
 }
 
 /**
- * Who may open a request: the owner, an admin, finance, or anyone holding a role
- * that appears in the approval chain. Faculty-scoped roles only reach requests
- * belonging to the faculty they are scoped to.
+ * Who may open a request. The rule itself lives in config/authz.ts, with no
+ * imports and therefore no database, so it can be tested on its own; this
+ * wrapper only hands it an AuthUser.
  */
 export function canViewRequest(
   user: AuthUser,
-  request: { userId: bigint; facultyId: bigint; status?: RequestStatus },
+  request: { userId: bigint; facultyId: bigint; submittedAt: Date | null },
 ): boolean {
-  if (request.userId === user.id) return true;
-  // An unsubmitted draft belongs to whoever is writing it. The listing has
-  // always hidden other people's drafts, but this function never looked at the
-  // status, so a reviewer, the approver or finance could open one by typing its
-  // id - reading the article, its attachments and printing the memo - before
-  // the claimant had filed anything. No step of the workflow needs it: a draft
-  // is in nobody's queue, and setQaIndicatorYear already refuses one.
-  if (request.status === RequestStatus.DRAFT) return false;
-  if (user.roles.includes('ADMIN') || user.roles.includes('FINANCE')) return true;
-
-  const scopedRoles = ['FACULTY_QA', 'DEAN'];
-  for (const scope of user.roleScopes) {
-    if (scope.roleCode === 'RESEARCHER') continue;
-    if (scopedRoles.includes(scope.roleCode)) {
-      if (scope.facultyId === null || scope.facultyId === request.facultyId) return true;
-      continue;
-    }
-    // RDI_OFFICER, ACADEMIC_OFFICE and APPROVER work university-wide.
-    if (['RDI_OFFICER', 'ACADEMIC_OFFICE', 'APPROVER'].includes(scope.roleCode)) return true;
-  }
-  return false;
+  return canSeeRequest(user, request);
 }
 
 /**
@@ -178,7 +159,10 @@ export function canViewRequest(
  * listed. Unit colleagues get the listing but not the detail - see
  * `summariseForPeers`.
  */
-function canOpenInFull(user: AuthUser, request: { userId: bigint; facultyId: bigint }): boolean {
+function canOpenInFull(
+  user: AuthUser,
+  request: { userId: bigint; facultyId: bigint; submittedAt: Date | null },
+): boolean {
   return canViewRequest(user, request);
 }
 
@@ -195,7 +179,9 @@ function canOpenInFull(user: AuthUser, request: { userId: bigint; facultyId: big
  * canViewRequest, which still refuses a peer outright, so this only has to
  * handle the list.
  */
-function summariseForPeers<T extends { userId: bigint; facultyId: bigint }>(
+function summariseForPeers<
+  T extends { userId: bigint; facultyId: bigint; submittedAt: Date | null },
+>(
   user: AuthUser,
   rows: T[],
 ): (T & { viewScope: 'OWNER' | 'FULL' | 'SUMMARY' })[] {
@@ -217,20 +203,21 @@ function summariseForPeers<T extends { userId: bigint; facultyId: bigint }>(
  * visibility is derived from the roles of the caller alone.
  */
 function visibilityFilter(user: AuthUser): Prisma.RequestWhereInput {
-  // Everything except other people's drafts, which canViewRequest now refuses
-  // to open: listing a row that cannot be opened is the dead link this page
-  // used to have for colleagues' claims.
+  // Everything except what other people never filed, which canViewRequest
+  // refuses to open: listing a row that cannot be opened is the dead link this
+  // page used to have for colleagues' claims.
   if (user.roles.includes('ADMIN') || user.roles.includes('FINANCE')) {
-    return { OR: [{ userId: user.id }, { status: { not: RequestStatus.DRAFT } }] };
+    return { OR: [{ userId: user.id }, { submittedAt: { not: null } }] };
   }
 
   const or: Prisma.RequestWhereInput[] = [{ userId: user.id }];
 
-  // Anyone may see the claims filed by their own unit, drafts excluded: an
-  // unsubmitted draft is private work, the same rule the faculty reviewers get.
-  // The rows come back stripped of money by summariseForPeers.
+  // Anyone may see the claims filed by their own unit - filed being the word:
+  // work that was never submitted is private, whether it is still a draft or
+  // was cancelled while still one. The rows come back stripped of money by
+  // summariseForPeers.
   if (user.facultyId !== null) {
-    or.push({ facultyId: user.facultyId, status: { not: RequestStatus.DRAFT } });
+    or.push({ facultyId: user.facultyId, submittedAt: { not: null } });
   }
 
   const facultyScoped = user.roleScopes.filter(
@@ -242,13 +229,13 @@ function visibilityFilter(user: AuthUser): Prisma.RequestWhereInput {
 
   if (facultyScoped.some((scope) => scope.facultyId === null)) {
     // Role granted without a faculty scope: treat as university-wide.
-    or.push({ status: { not: RequestStatus.DRAFT } });
+    or.push({ submittedAt: { not: null } });
   } else if (scopedFacultyIds.length > 0) {
-    or.push({ facultyId: { in: scopedFacultyIds }, status: { not: RequestStatus.DRAFT } });
+    or.push({ facultyId: { in: scopedFacultyIds }, submittedAt: { not: null } });
   }
 
   if (user.roles.some((role) => ['RDI_OFFICER', 'ACADEMIC_OFFICE', 'APPROVER'].includes(role))) {
-    or.push({ status: { not: RequestStatus.DRAFT } });
+    or.push({ submittedAt: { not: null } });
   }
 
   return { OR: or };
@@ -317,7 +304,7 @@ export async function getRequestDetail(user: AuthUser, id: bigint): Promise<Requ
 export async function getTimeline(user: AuthUser, id: bigint) {
   const request = await prisma.request.findUnique({
     where: { id },
-    select: { id: true, userId: true, facultyId: true, status: true },
+    select: { id: true, userId: true, facultyId: true, submittedAt: true },
   });
   if (!request) throw notFound('ไม่พบคำขอที่ระบุ');
   if (!canViewRequest(user, request)) throw forbidden('คุณไม่มีสิทธิ์เข้าถึงคำขอนี้');
