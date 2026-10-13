@@ -167,6 +167,8 @@ async function seedDemoUsers() {
   const edu = await unit('EDU');
   const acad = await unit('ACAD');
   const pres = await unit('PRES');
+  const internal = await unit('INTERNAL');
+  const nur = await unit('NUR');
 
   const roleByCode = new Map(
     (await prisma.role.findMany()).map((role) => [role.code, role.id] as const),
@@ -245,7 +247,12 @@ async function seedDemoUsers() {
       lastName: 'ส่งเสริมวิชาการ',
       unit: acad,
       staffTrack: 'ACADEMIC',
-      roles: [{ code: 'ACADEMIC_OFFICE' }],
+      // Also the head of สำนักส่งเสริมวิชาการฯ, so they hold DEAN for their own
+      // unit - a claim from that office is signed off by its director, the same
+      // person who later gives the office's opinion at step four. Different
+      // steps, and never their own claim, which rule 2 of the workflow still
+      // refuses.
+      roles: [{ code: 'ACADEMIC_OFFICE' }, { code: 'DEAN', facultyId: acad.facultyId }],
     },
     {
       username: 'approver',
@@ -278,6 +285,96 @@ async function seedDemoUsers() {
       staffTrack: 'SUPPORT',
       roles: [{ code: 'ADMIN' }, { code: 'FINANCE' }],
     },
+
+    // Every unit that can receive a claim needs a quality officer and a head to
+    // sign for it, or claims from that unit stop at the first step for good
+    // (CLAUDE.md section 13.5). Only LAS had both, so the five units below had
+    // no way through at all - which is what the first outside testers hit, since
+    // they signed up under สำนักส่งเสริมวิชาการฯ.
+    //
+    // The three that are not faculties have no dean, so their head holds the
+    // DEAN role for their own unit, per Q6 in section 13.9.
+    {
+      username: 'qaacad',
+      email: 'qa.acad@cpru.ac.th',
+      prefix: 'นาง',
+      firstName: 'อารีย์',
+      lastName: 'วิชาการดี',
+      unit: acad,
+      staffTrack: 'SUPPORT',
+      roles: [{ code: 'RESEARCHER' }, { code: 'FACULTY_QA', facultyId: acad.facultyId }],
+    },
+    {
+      username: 'qapres',
+      email: 'qa.pres@cpru.ac.th',
+      prefix: 'นางสาว',
+      firstName: 'จันทร์เพ็ญ',
+      lastName: 'สำนักงาน',
+      unit: pres,
+      staffTrack: 'SUPPORT',
+      roles: [{ code: 'RESEARCHER' }, { code: 'FACULTY_QA', facultyId: pres.facultyId }],
+    },
+    {
+      username: 'deanpres',
+      email: 'head.pres@cpru.ac.th',
+      prefix: 'นาย',
+      firstName: 'ธีรยุทธ',
+      lastName: 'บริหารงาน',
+      unit: pres,
+      staffTrack: 'SUPPORT',
+      roles: [{ code: 'RESEARCHER' }, { code: 'DEAN', facultyId: pres.facultyId }],
+    },
+    {
+      username: 'qainternal',
+      email: 'qa.internal@cpru.ac.th',
+      prefix: 'นางสาว',
+      firstName: 'ศิริพร',
+      lastName: 'ตรวจสอบ',
+      unit: internal,
+      staffTrack: 'SUPPORT',
+      roles: [{ code: 'RESEARCHER' }, { code: 'FACULTY_QA', facultyId: internal.facultyId }],
+    },
+    {
+      username: 'deaninternal',
+      email: 'head.internal@cpru.ac.th',
+      prefix: 'นาย',
+      firstName: 'สมพงษ์',
+      lastName: 'ตรวจสอบภายใน',
+      unit: internal,
+      staffTrack: 'SUPPORT',
+      roles: [{ code: 'RESEARCHER' }, { code: 'DEAN', facultyId: internal.facultyId }],
+    },
+    {
+      username: 'qaedu',
+      email: 'qa.edu@cpru.ac.th',
+      prefix: 'นาง',
+      firstName: 'กนกวรรณ',
+      lastName: 'ครุศาสตร์ดี',
+      unit: edu,
+      staffTrack: 'SUPPORT',
+      roles: [{ code: 'RESEARCHER' }, { code: 'FACULTY_QA', facultyId: edu.facultyId }],
+    },
+    {
+      username: 'qanur',
+      email: 'qa.nur@cpru.ac.th',
+      prefix: 'นางสาว',
+      firstName: 'พิมพ์ใจ',
+      lastName: 'พยาบาลดี',
+      unit: nur,
+      staffTrack: 'SUPPORT',
+      roles: [{ code: 'RESEARCHER' }, { code: 'FACULTY_QA', facultyId: nur.facultyId }],
+    },
+    {
+      username: 'deannur',
+      email: 'dean.nur@cpru.ac.th',
+      prefix: 'ผศ.ดร.',
+      firstName: 'วรรณภา',
+      lastName: 'พยาบาลศาสตร์',
+      academicPosition: 'ผู้ช่วยศาสตราจารย์',
+      unit: nur,
+      staffTrack: 'ACADEMIC',
+      roles: [{ code: 'RESEARCHER' }, { code: 'DEAN', facultyId: nur.facultyId }],
+    },
   ];
 
   for (const account of accounts) {
@@ -309,7 +406,6 @@ async function seedDemoUsers() {
   // One application waiting for review, so the admin approval screen has
   // something to show in a demo (CLAUDE.md section 13.4). It has no roles
   // and cannot log in until an admin approves it.
-  const nur = await unit('NUR');
   await prisma.user.create({
     data: {
       username: 'applicant@cpru.ac.th',
