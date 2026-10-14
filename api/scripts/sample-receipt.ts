@@ -46,7 +46,7 @@ const fixture = {
 const stream = buildReceiptVoucher(fixture);
 const file = fs.createWriteStream(out);
 stream.pipe(file);
-file.on("finish", () => {
+file.on('finish', () => {
   console.log('เขียนแล้ว:', out, fs.statSync(out).size, 'bytes');
 });
 file.on('error', (error) => {

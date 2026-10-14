@@ -85,7 +85,7 @@ function readInteger(value: number): string {
  * a reader no satang were dropped.
  */
 export function bahtText(amount: number | string): string {
-  const value = typeof amount === "string" ? Number(amount) : amount;
+  const value = typeof amount === 'string' ? Number(amount) : amount;
   if (!Number.isFinite(value)) throw new Error('จำนวนเงินไม่ถูกต้อง');
 
   const negative = value < 0;
