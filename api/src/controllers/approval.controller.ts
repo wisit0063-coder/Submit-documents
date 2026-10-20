@@ -48,6 +48,17 @@ export const reject = asyncHandler(async (req: Request, res: Response) => {
   res.json(serialize(result));
 });
 
+export const revoke = asyncHandler(async (req: Request, res: Response) => {
+  const { reason } = req.body as { reason: string };
+  const result = await approvalService.revokeApproval(
+    requireUser(req),
+    idParam(req),
+    reason,
+    clientIp(req),
+  );
+  res.json(serialize(result));
+});
+
 export const finalApprove = asyncHandler(async (req: Request, res: Response) => {
   const result = await approvalService.finalApprove(
     requireUser(req),

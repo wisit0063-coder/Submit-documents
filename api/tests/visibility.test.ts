@@ -1,6 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canSeeRequest, type Viewer, type ViewableRequest } from '../src/config/authz';
+import {
+  BUDGET_EDIT_ROLES,
+  REVOKE_ROLES,
+  canSeeRequest,
+  type Viewer,
+  type ViewableRequest,
+} from '../src/config/authz';
+
+/**
+ * กองคลัง does not work in this system (mentor, 20 ต.ค. 2569). The fund is the
+ * research office's, so the ceiling and the revoke button are too.
+ */
+test('the research office, not finance, sets the ceiling and revokes approvals', () => {
+  assert.equal(BUDGET_EDIT_ROLES.includes('RDI_OFFICER'), true);
+  assert.equal(BUDGET_EDIT_ROLES.includes('FINANCE'), false);
+  assert.equal(REVOKE_ROLES.includes('RDI_OFFICER'), true);
+  assert.equal(REVOKE_ROLES.includes('ADMIN'), true);
+  // The approver signed the approval; undoing it is a different hand.
+  assert.equal(REVOKE_ROLES.includes('APPROVER'), false);
+  assert.equal(REVOKE_ROLES.includes('RESEARCHER'), false);
+});
 
 const LAS = 3n;
 const EDU = 4n;

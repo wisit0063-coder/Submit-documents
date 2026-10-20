@@ -6,7 +6,7 @@ import { AppError } from '../utils/errors';
 import { formatThaiDate } from '../utils/datetime';
 import { bahtText } from '../utils/baht-text';
 import { DOC_TYPE_LABELS } from './attachment.service';
-import { STATUS_LABELS_TH, stepByCode } from '../config/workflow';
+import { ENTITLEMENT_STATUSES, STATUS_LABELS_TH, stepByCode } from '../config/workflow';
 import type { RequestDetail } from './request.service';
 
 /**
@@ -376,7 +376,10 @@ export function buildRequestDocument(request: RequestDetail): NodeJS.ReadableStr
 export function buildReceiptVoucher(request: RequestDetail): NodeJS.ReadableStream {
   const pdfPrinter = getPrinter();
 
-  if (request.amountApproved === null) {
+  // The status, not just the amount: a revoked or clawed-back claim keeps the
+  // amount it was approved for, and a receipt for money nobody is owed any more
+  // must not be printable.
+  if (request.amountApproved === null || !ENTITLEMENT_STATUSES.includes(request.status)) {
     throw new AppError(
       422,
       'RECEIPT_NOT_APPROVED',

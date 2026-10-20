@@ -114,7 +114,7 @@ export function DashboardPage() {
   const { data: budget } = useQuery({
     queryKey: ['budget-summary'],
     queryFn: () => api.get<BudgetSummary>('/budget/summary'),
-    enabled: can('FINANCE', 'ADMIN', 'APPROVER'),
+    enabled: can('FINANCE', 'ADMIN', 'APPROVER', 'RDI_OFFICER'),
   });
 
   if (isLoading) {
@@ -197,7 +197,7 @@ export function DashboardPage() {
         <StatTile
           label="อนุมัติแล้ว"
           value={String((counts.APPROVED ?? 0) + (counts.PAID ?? 0))}
-          sub={`บันทึกการเบิกจ่ายแล้ว ${counts.PAID ?? 0} เรื่อง`}
+          sub="ตัดงบกองทุนวิจัยแล้ว"
           tone="success"
         />
       </div>
@@ -213,10 +213,13 @@ export function DashboardPage() {
       )}
 
       {budget && (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <StatTile label="วงเงินตั้งต้น" value={formatMoney(budget.total, false)} sub="บาท" />
-          <StatTile label="ยอดจอง (อนุมัติแล้วรอจ่าย)" value={formatMoney(budget.reserved, false)} sub="บาท" />
-          <StatTile label="ยอดจ่ายจริง" value={formatMoney(budget.paid, false)} sub="บาท" />
+          <StatTile
+            label="อนุมัติแล้ว (ตัดงบ)"
+            value={formatMoney(budget.reserved + budget.paid, false)}
+            sub="บาท"
+          />
           <StatTile
             label="คงเหลือใช้ได้"
             value={formatMoney(budget.available, false)}

@@ -10,6 +10,7 @@ import {
   stepByStatus,
   type WorkflowStep,
 } from '../config/workflow';
+import { REVOKE_ROLES } from '../config/authz';
 import { forbidden, notFound, unprocessable } from '../utils/errors';
 import { businessDaysBetween } from '../utils/datetime';
 import { assertBudgetAvailable } from './budget.service';
@@ -304,6 +305,84 @@ export async function rejectRequest(
  * The approved amount may legitimately be lower than the amount requested - the
  * announcement says "not exceeding" - which is why the two are separate columns.
  */
+/**
+ * Undoes an approval (CLAUDE.md ข้อ 26). For the two cases the chain had no
+ * answer to once กองคลัง stopped being part of this system: a claim approved
+ * but never drawn - the claimant left, the papers were never completed - and a
+ * claim found ineligible afterwards, which ประกาศ ข้อ ๕(๖) says must be repaid
+ * to the research fund.
+ *
+ * The system cannot collect the money; กองคลัง does that on paper. What it
+ * records is that the claim is void: REVOKED drops out of the reserved sum, so
+ * the money is back in the fund at once; it is not an entitlement status, so the
+ * claimant's slot comes back; and it blocks the article like a clawback does,
+ * so the same paper cannot simply be filed again. The approval rows stay - they
+ * are the signatures that were given, and the log says why they no longer hold.
+ *
+ * Only APPROVED. A claim someone did record as paid goes through the refund
+ * path, which knows how much was paid out.
+ */
+export async function revokeApproval(
+  user: AuthUser,
+  requestId: bigint,
+  reason: string,
+  ipAddress: string | null,
+) {
+  // The route checks this too; the service does not trust its caller.
+  if (!user.roles.some((role) => REVOKE_ROLES.includes(role))) {
+    throw forbidden('ยกเลิกหลังอนุมัติได้เฉพาะงานวิจัยและผู้ดูแลระบบ');
+  }
+
+  const request = await prisma.request.findUnique({
+    where: { id: requestId },
+    select: { id: true, userId: true, status: true },
+  });
+  if (!request) throw notFound('ไม่พบคำขอที่ระบุ');
+  if (request.userId === user.id) {
+    throw forbidden('ไม่สามารถยกเลิกคำขอของตนเองได้');
+  }
+  if (request.status !== RequestStatus.APPROVED) {
+    throw unprocessable(
+      'NOT_REVOCABLE',
+      'ยกเลิกหลังอนุมัติได้เฉพาะคำขอที่อยู่ในสถานะ "อนุมัติแล้ว" เท่านั้น',
+    );
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    // A second press, or a second officer, finds REVOKED here and stops.
+    await lockRequest(tx, requestId, request.status);
+
+    const result = await tx.request.update({
+      where: { id: requestId },
+      data: { status: RequestStatus.REVOKED, closedAt: new Date() },
+    });
+
+    await writeStatusLog(tx, {
+      requestId,
+      fromStatus: request.status,
+      toStatus: RequestStatus.REVOKED,
+      actor: user,
+      note: reason,
+      ipAddress,
+    });
+
+    return result;
+  });
+
+  await notifyStatusChange({
+    requestId: updated.id,
+    requestNo: updated.requestNo,
+    articleTitle: updated.articleTitle,
+    ownerId: updated.userId,
+    facultyId: updated.facultyId,
+    toStatus: RequestStatus.REVOKED,
+    actorName: user.fullName,
+    note: reason,
+  });
+
+  return updated;
+}
+
 export async function finalApprove(
   user: AuthUser,
   requestId: bigint,

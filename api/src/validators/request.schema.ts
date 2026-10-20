@@ -123,6 +123,16 @@ export const toCommitteeSchema = z.object({
   comment: z.string().trim().min(5, 'กรุณาระบุเหตุผลที่ส่งเข้าคณะกรรมการ').max(2000),
 });
 
+export const revokeSchema = z
+  .object({
+    reason: z
+      .string({ required_error: 'กรุณาระบุเหตุผล' })
+      .trim()
+      .min(5, 'กรุณาระบุเหตุผลอย่างน้อย 5 ตัวอักษร')
+      .max(2000, 'เหตุผลยาวเกินไป'),
+  })
+  .strict('ข้อมูลที่ส่งมามีช่องที่ระบบไม่รองรับ');
+
 export const qaYearSchema = z.object({
   qaIndicatorYear: z.coerce.number().int().min(2400).max(2700),
 });

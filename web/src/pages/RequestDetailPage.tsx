@@ -16,6 +16,7 @@ import {
   WORKFLOW_ORDER,
 } from '@/lib/format';
 import { outstanding, refundedSoFar } from '@/lib/refund';
+import { REVOKE_ROLES } from '@/lib/access';
 import {
   Alert,
   Badge,
@@ -55,7 +56,17 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 
 /** Horizontal rail of the happy path, with the current step marked. */
 function ProgressRail({ status }: { status: RequestStatus }) {
-  const offPath = ['RETURNED', 'REJECTED', 'CANCELLED', 'REFUNDED', 'COMMITTEE_REVIEW'].includes(status);
+  // Every status that is not a step of the rail, so it shows as a badge instead
+  // of an all-grey rail. PAID is here since the rail stops at APPROVED.
+  const offPath = [
+    'RETURNED',
+    'REJECTED',
+    'CANCELLED',
+    'REFUNDED',
+    'REVOKED',
+    'PAID',
+    'COMMITTEE_REVIEW',
+  ].includes(status);
   const currentIndex = WORKFLOW_ORDER.indexOf(status);
 
   return (
@@ -105,6 +116,7 @@ export function RequestDetailPage() {
     | 'committee'
     | 'pay'
     | 'cancel'
+    | 'revoke'
     | 'qa-year'
   >(null);
   const [qaYear, setQaYear] = useState('');
@@ -210,6 +222,9 @@ export function RequestDetailPage() {
       request.status,
     );
   const canPay = can('FINANCE') && request.status === 'APPROVED';
+  // Mirrors revokeApproval on the server: research office or ADMIN, never on
+  // one's own claim, and only while the claim stands approved.
+  const canRevoke = request.status === 'APPROVED' && !isOwner && can(...REVOKE_ROLES);
 
   // Mirrors setQaIndicatorYear on the server - FACULTY_QA of this request's
   // faculty (or one granted without a faculty), or ADMIN. The server checks
@@ -249,7 +264,7 @@ export function RequestDetailPage() {
             </a>
             {/* The voucher is what the claimant signs for the money, so it
                 only exists once an amount has been approved. */}
-            {request.amountApproved !== null && (
+            {request.amountApproved !== null && ['APPROVED', 'PAID'].includes(request.status) && (
               <a
                 href={api.fileUrl(`/requests/${request.id}/receipt`)}
                 target="_blank"
@@ -568,6 +583,22 @@ export function RequestDetailPage() {
                   </>
                 )}
               </dl>
+            </Card>
+          )}
+
+          {canRevoke && (
+            <Card className="no-print">
+              <Button
+                variant="outline"
+                className="w-full text-rose-600"
+                onClick={() => setDialog('revoke')}
+              >
+                ยกเลิกหลังอนุมัติ
+              </Button>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                ใช้เมื่อผู้ขอเบิกเงินไม่ได้ หรือตรวจพบภายหลังว่าไม่เข้าเกณฑ์ (ประกาศข้อ ๕(๖))
+                งบกลับเข้ากองทุนและคืนสิทธิ์ให้ผู้ขอ แต่บทความนี้ยื่นซ้ำไม่ได้
+              </p>
             </Card>
           )}
 
@@ -891,6 +922,50 @@ export function RequestDetailPage() {
             <Textarea value={comment} onChange={(event) => setComment(event.target.value)} />
           </Field>
         </div>
+      </Modal>
+
+      <Modal
+        open={dialog === 'revoke'}
+        onClose={closeDialog}
+        title="ยกเลิกหลังอนุมัติ"
+        footer={
+          <>
+            <Button variant="outline" onClick={closeDialog}>
+              ไม่ยกเลิก
+            </Button>
+            <Button
+              variant="danger"
+              loading={action.isPending}
+              disabled={comment.trim().length < 5}
+              onClick={() =>
+                run(
+                  `/requests/${request.id}/revoke`,
+                  { reason: comment },
+                  'ยกเลิกหลังอนุมัติแล้ว · งบกลับเข้ากองทุนแล้ว',
+                )
+              }
+            >
+              ยืนยันยกเลิกหลังอนุมัติ
+            </Button>
+          </>
+        }
+      >
+        {actionError && <Alert tone="error">{actionError}</Alert>}
+        <Alert tone="warning">
+          คำขอ {request.requestNo} จะถูกยกเลิก งบ {formatMoney(request.amountApproved)}{' '}
+          กลับเข้ากองทุนวิจัย และผู้ขอได้สิทธิ์ 1 ใน 3 เรื่องของปีนี้คืน
+          แต่บทความนี้จะยื่นขอใหม่ไม่ได้อีก · ย้อนกลับไม่ได้
+        </Alert>
+        <p className="mt-3 text-sm text-slate-600">
+          การตามเงินคืนจากผู้ขอ (ถ้าเบิกไปแล้ว) ทำที่กองคลังนอกระบบ ระบบบันทึกเฉพาะว่าคำขอนี้เป็นโมฆะ
+        </p>
+        <Field label="เหตุผล" required className="mt-3">
+          <Textarea
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            placeholder="เช่น ผู้ขอลาออกก่อนเบิกเงิน · ตรวจพบภายหลังว่าบทความเป็นส่วนหนึ่งของวิทยานิพนธ์"
+          />
+        </Field>
       </Modal>
 
       <Modal

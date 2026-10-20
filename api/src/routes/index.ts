@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate, requireCronToken, requireRoles } from '../middleware/auth';
-import { BUDGET_EDIT_ROLES } from '../config/authz';
+import { BUDGET_EDIT_ROLES, REVOKE_ROLES } from '../config/authz';
 import { validateBody, validateQuery } from '../middleware/validate';
 import { uploadAttachment as upload } from '../middleware/upload';
 import * as authController from '../controllers/auth.controller';
@@ -45,6 +45,7 @@ import {
   qaYearSchema,
   rejectSchema,
   returnSchema,
+  revokeSchema,
   submitSchema,
   toCommitteeSchema,
   updateRequestSchema,
@@ -151,6 +152,16 @@ router.post(
   validateBody(finalApproveSchema),
   approvalController.finalApprove,
 );
+// Undoes an approval: the money goes back to the fund, the slot back to the
+// claimant, the article stays barred. The research office's call - it is what
+// the system has instead of กองคลัง recording a clawback, since กองคลัง does
+// not work in this system (CLAUDE.md ข้อ 26).
+router.post(
+  '/requests/:id/revoke',
+  requireRoles(...REVOKE_ROLES),
+  validateBody(revokeSchema),
+  approvalController.revoke,
+);
 router.post(
   '/requests/:id/to-committee',
   requireRoles('RDI_OFFICER'),
@@ -165,14 +176,25 @@ router.patch(
 );
 
 // --- Budget and payments --------------------------------------
-router.get('/budget/summary', requireRoles('FINANCE', 'ADMIN', 'APPROVER'), misc.budgetSummary);
+// RDI_OFFICER added 20 ต.ค. 2569: the fund is the research office's and it now
+// sets the ceiling (BUDGET_EDIT_ROLES). FINANCE keeps reading in case the role
+// is ever staffed; it costs nothing.
+router.get(
+  '/budget/summary',
+  requireRoles('FINANCE', 'ADMIN', 'APPROVER', 'RDI_OFFICER'),
+  misc.budgetSummary,
+);
 // The approver reads this list: /budget is open to them and the page loads
 // nothing else, so without it they reached a page that only showed a permission
 // error. Creating and editing a budget year stays with ADMIN below.
-router.get('/budget/years', requireRoles('FINANCE', 'ADMIN', 'APPROVER'), misc.listBudgetYears);
+router.get(
+  '/budget/years',
+  requireRoles('FINANCE', 'ADMIN', 'APPROVER', 'RDI_OFFICER'),
+  misc.listBudgetYears,
+);
 router.get(
   '/budget/years/:id/logs',
-  requireRoles('FINANCE', 'ADMIN', 'APPROVER'),
+  requireRoles('FINANCE', 'ADMIN', 'APPROVER', 'RDI_OFFICER'),
   misc.listBudgetYearLogs,
 );
 router.post('/budget/years', requireRoles('ADMIN'), validateBody(budgetYearSchema), misc.createBudgetYear);

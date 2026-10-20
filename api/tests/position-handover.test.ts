@@ -67,11 +67,17 @@ test('the screen lists every signing step, in the order a claim meets them', () 
   }
 });
 
-test('finance is on the list but carries no queue, because its step is optional', () => {
-  const finance = POSITION_ROLES.find((role) => role.roleCode === 'FINANCE');
-  assert.ok(finance, 'การเงินต้องอยู่ในรายการ เพราะลงนามการเรียกเงินคืนตามประกาศ ข้อ ๕(๖)');
-  assert.equal(finance.waitingStatus, null);
-  assert.equal(finance.order, WORKFLOW_STEPS.length + 1, 'ต้องอยู่ท้ายสุด');
+/**
+ * The mentor drew the line on 20 ต.ค. 2569: the system is the research
+ * office's and ends at approval; กองคลัง works from the printed paper. The
+ * screen lists the signing chain and nothing after it.
+ */
+test('the list is exactly the signing chain, with no finance post after it', () => {
+  assert.equal(POSITION_ROLES.length, WORKFLOW_STEPS.length);
+  assert.equal(POSITION_ROLE_CODES.includes('FINANCE'), false, 'กองคลังไม่ได้ใช้งานระบบนี้');
+  for (const role of POSITION_ROLES) {
+    assert.notEqual(role.waitingStatus, null, `${role.roleCode} ต้องมีคิวงานของตัวเอง`);
+  }
 });
 
 /**

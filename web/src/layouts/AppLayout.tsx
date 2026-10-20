@@ -32,7 +32,10 @@ const NAV_ITEMS: NavItem[] = [
     icon: icon('M3 12h5l2 3h4l2-3h5M3 12l2-7h14l2 7v7H3v-7z'),
     badge: 'inbox',
   },
-  { to: '/payments', label: 'การเบิกจ่าย', icon: icon('M3 7h18v11H3V7zm0 4h18M7 15h4') },
+  // No "การเบิกจ่าย" item since 20 ต.ค. 2569: the mentor said กองคลัง is a
+  // separate office that does not work in this system, which ends at approval.
+  // The page and its endpoints are kept, unlinked, in case that ever changes
+  // (CLAUDE.md ข้อ 18.3 · 26).
   { to: '/budget', label: 'งบประมาณ', icon: icon('M12 3v18M7 7h10M5 12h14M7 17h10') },
   { to: '/reports', label: 'รายงาน', icon: icon('M4 20V10M10 20V4M16 20v-7M22 20H2') },
   {

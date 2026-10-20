@@ -53,9 +53,11 @@ const EMPTY: BudgetForm = {
  */
 function BudgetBar({ year }: { year: BudgetYear }) {
   const total = Math.max(1, year.total);
+  // Reserved and paid are one bucket to the people who use this page: the
+  // money left the fund when the approver signed, and nobody here records the
+  // transfer (CLAUDE.md ข้อ 26). The API still reports them apart.
   const segments = [
-    { key: 'paid', label: 'จ่ายจริง', value: year.paid, color: SERIES.blue },
-    { key: 'reserved', label: 'จอง (รอจ่าย)', value: year.reserved, color: SERIES.orange },
+    { key: 'used', label: 'อนุมัติแล้ว (ตัดงบ)', value: year.reserved + year.paid, color: SERIES.blue },
     { key: 'available', label: 'คงเหลือ', value: Math.max(0, year.available), color: SERIES.aqua },
   ];
 
@@ -266,7 +268,7 @@ export function BudgetPage() {
     <>
       <PageHeader
         title="งบประมาณกองทุนวิจัย"
-        description="แยกยอดเป็นสามก้อน: วงเงินตั้งต้น ยอดจองจากการอนุมัติ และยอดจ่ายจริง"
+        description="วงเงินตั้งต้น ยอดที่อนุมัติแล้ว (ตัดงบ) และยอดคงเหลือ"
         action={
           can('ADMIN') && <Button onClick={openCreate}>ตั้งวงเงินปีใหม่</Button>
         }
@@ -297,8 +299,8 @@ export function BudgetPage() {
       )}
 
       <Alert tone="info">
-        ยอดจองถูกตัดตั้งแต่วินาทีที่ผู้มีอำนาจอนุมัติ ไม่ใช่ตอนโอนเงิน
-        ทำให้ช่วงที่อนุมัติแล้วแต่ยังไม่จ่าย ตัวเลขคงเหลือไม่หลอกให้อนุมัติเกินวงเงิน
+        งบถูกตัดทันทีที่รองอธิการบดีกดอนุมัติ การเบิกเงินจริงทำที่กองคลังด้วยเอกสารที่ระบบพิมพ์ออก
+        ถ้าคำขอที่อนุมัติแล้วถูกยกเลิกหลังอนุมัติ งบจะกลับเข้ากองทุนทันที
       </Alert>
 
       <div className="mt-5 space-y-5">
@@ -337,7 +339,7 @@ export function BudgetPage() {
                 )
               }
             >
-              <div className="grid gap-4 sm:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-sm text-slate-500">วงเงินตั้งต้น</p>
                   <p className="mt-0.5 text-lg font-bold tabular-nums text-slate-900">
@@ -345,15 +347,9 @@ export function BudgetPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">ยอดจอง</p>
-                  <p className="mt-0.5 text-lg font-bold tabular-nums text-amber-700">
-                    {formatMoney(year.reserved, false)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500">ยอดจ่ายจริง</p>
+                  <p className="text-sm text-slate-500">อนุมัติแล้ว (ตัดงบ)</p>
                   <p className="mt-0.5 text-lg font-bold tabular-nums text-slate-900">
-                    {formatMoney(year.paid, false)}
+                    {formatMoney(year.reserved + year.paid, false)}
                   </p>
                 </div>
                 <div>
@@ -384,8 +380,7 @@ export function BudgetPage() {
                   </thead>
                   <tbody>
                     {[
-                      { label: 'จ่ายจริง', value: year.paid },
-                      { label: 'จอง (อนุมัติแล้วรอจ่าย)', value: year.reserved },
+                      { label: 'อนุมัติแล้ว (ตัดงบ)', value: year.reserved + year.paid },
                       { label: 'คงเหลือใช้ได้', value: year.available },
                     ].map((row) => (
                       <tr key={row.label}>

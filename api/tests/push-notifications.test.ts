@@ -21,11 +21,24 @@ const claim = { requestNo: 'RQ-2570-0007', articleTitle: 'การพัฒน�
 
 // ------------------------------------------------------------ who hears what
 
-test('the claimant hears about exactly three outcomes', () => {
+test('the claimant hears about exactly four outcomes', () => {
   assert.deepEqual(
     [...OWNER_PUSH_STATUSES].sort(),
-    [RequestStatus.APPROVED, RequestStatus.REJECTED, RequestStatus.RETURNED].sort(),
+    [
+      RequestStatus.APPROVED,
+      RequestStatus.REJECTED,
+      RequestStatus.RETURNED,
+      RequestStatus.REVOKED,
+    ].sort(),
   );
+});
+
+test('a revoked approval tells the claimant why, and never the amount', () => {
+  const popup = ownerPush(RequestStatus.REVOKED, claim, 'ผู้ขอลาออกก่อนเบิกเงิน');
+  assert.ok(popup);
+  assert.match(popup.title, /ยกเลิกหลังอนุมัติ/);
+  assert.match(popup.body, /ผู้ขอลาออกก่อนเบิกเงิน/);
+  assert.doesNotMatch(`${popup.title}${popup.body}`, /บาท|\d{1,3},\d{3}/);
 });
 
 test('every step in between stays quiet for the claimant', () => {

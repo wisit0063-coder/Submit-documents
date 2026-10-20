@@ -96,6 +96,7 @@ export const STATUS_LABELS: Record<RequestStatus, string> = {
   PAID: 'บันทึกการเบิกจ่ายแล้ว',
   CANCELLED: 'ยกเลิก',
   REFUNDED: 'เรียกเงินคืน',
+  REVOKED: 'ยกเลิกหลังอนุมัติ',
 };
 
 /** Colour carries meaning here, so each status also keeps its text label. */
@@ -113,6 +114,7 @@ export const STATUS_TONE: Record<RequestStatus, string> = {
   PAID: 'bg-teal-50 text-teal-800 ring-teal-200',
   CANCELLED: 'bg-slate-100 text-slate-500 ring-slate-200',
   REFUNDED: 'bg-orange-50 text-orange-800 ring-orange-200',
+  REVOKED: 'bg-rose-50 text-rose-700 ring-rose-200',
 };
 
 export const ROLE_LABELS: Record<RoleCode, string> = {
@@ -147,8 +149,10 @@ export const WORKFLOW_ORDER: RequestStatus[] = [
   'RDI_REVIEW',
   'ACADEMIC_OFFICE_REVIEW',
   'PENDING_APPROVAL',
+  // The rail ends here: approval is where the process ends (CLAUDE.md ข้อ 5).
+  // PAID used to follow, a step nobody in this system takes since กองคลัง does
+  // not work in it (ข้อ 26), so it sat grey at the end of every claim.
   'APPROVED',
-  'PAID',
 ];
 
 export const STEP_LABELS: Record<string, string> = {

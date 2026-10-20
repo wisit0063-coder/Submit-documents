@@ -11,7 +11,8 @@ export type RequestStatus =
   | 'REJECTED'
   | 'PAID'
   | 'CANCELLED'
-  | 'REFUNDED';
+  | 'REFUNDED'
+  | 'REVOKED';
 
 export type RoleCode =
   | 'RESEARCHER'

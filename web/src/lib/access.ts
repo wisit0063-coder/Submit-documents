@@ -16,7 +16,9 @@ export const PAGE_ROLES: Record<string, RoleCode[]> = {
   '/requests/new': ['RESEARCHER'],
   '/inbox': REVIEWER_ROLES,
   '/payments': ['FINANCE', 'ADMIN'],
-  '/budget': ['FINANCE', 'ADMIN', 'APPROVER'],
+  // RDI_OFFICER since 20 ต.ค. 2569: the fund is the research office's and it
+  // sets the ceiling now. FINANCE stays in case the role is ever staffed.
+  '/budget': ['FINANCE', 'ADMIN', 'APPROVER', 'RDI_OFFICER'],
   '/reports': [
     'ADMIN',
     'FINANCE',
@@ -44,4 +46,10 @@ export function rolesForPath(path: string): RoleCode[] | undefined {
  * Creating a year, and opening or closing one, is ADMIN alone: those pick the
  * pot every new claim draws from.
  */
-export const BUDGET_EDIT_ROLES: RoleCode[] = ['ADMIN', 'FINANCE'];
+export const BUDGET_EDIT_ROLES: RoleCode[] = ['ADMIN', 'RDI_OFFICER'];
+
+/**
+ * Who sees the "ยกเลิกหลังอนุมัติ" button. Must match REVOKE_ROLES in
+ * api/src/config/authz.ts, which is what enforces it.
+ */
+export const REVOKE_ROLES: RoleCode[] = ['RDI_OFFICER', 'ADMIN'];

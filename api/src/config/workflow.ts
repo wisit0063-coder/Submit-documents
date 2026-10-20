@@ -154,6 +154,10 @@ export const DUPLICATE_BLOCKING_STATUSES: RequestStatus[] = [
   RequestStatus.APPROVED,
   RequestStatus.PAID,
   RequestStatus.REFUNDED,
+  // Revoked after approval: the claim was found ineligible or could not be
+  // drawn. Same answer as a clawback - the slot and the money go back, the
+  // article does not come back (owner's decision, 20 ต.ค. 2569).
+  RequestStatus.REVOKED,
 ];
 
 /**
@@ -199,6 +203,7 @@ export const STATUS_LABELS_TH: Record<RequestStatus, string> = {
   PAID: 'บันทึกการเบิกจ่ายแล้ว',
   CANCELLED: 'ยกเลิก',
   REFUNDED: 'เรียกเงินคืน',
+  REVOKED: 'ยกเลิกหลังอนุมัติ',
 };
 
 export const ROLE_LABELS_TH: Record<string, string> = {
@@ -311,26 +316,20 @@ export interface PositionRole {
   waitingStatus: RequestStatus | null;
 }
 
-export const POSITION_ROLES: readonly PositionRole[] = [
-  ...WORKFLOW_STEPS.map((step) => ({
-    order: step.order,
-    roleCode: step.roleCode,
-    labelTh: step.labelTh,
-    facultyScoped: step.facultyScoped,
-    waitingStatus: step.status,
-  })),
-  {
-    // Last because it comes after the chain ends, and marked as optional
-    // because nobody is required to record a payment (ข้อ 18.3) - but the
-    // account still signs for refunds under ประกาศ ข้อ ๕(๖), so it is handed on
-    // the same way.
-    order: WORKFLOW_STEPS.length + 1,
-    roleCode: 'FINANCE',
-    labelTh: 'บันทึกผลการเบิกจ่าย (ไม่ใช่ขั้นบังคับ)',
-    facultyScoped: false,
-    waitingStatus: null,
-  },
-];
+/**
+ * The signing chain and nothing after it. FINANCE was listed last until 20 ต.ค.
+ * 2569, when the mentor drew the line: the system belongs to the research
+ * office and ends at approval, and กองคลัง works from the printed paper, not
+ * from an account here. Revoking an approval is the research office's job now
+ * (REVOKE_ROLES), so no post outside the chain needs handing on.
+ */
+export const POSITION_ROLES: readonly PositionRole[] = WORKFLOW_STEPS.map((step) => ({
+  order: step.order,
+  roleCode: step.roleCode,
+  labelTh: step.labelTh,
+  facultyScoped: step.facultyScoped,
+  waitingStatus: step.status,
+}));
 
 /** Role codes that make an account a position account, for guarding handover. */
 export const POSITION_ROLE_CODES: readonly string[] = POSITION_ROLES.map((role) => role.roleCode);

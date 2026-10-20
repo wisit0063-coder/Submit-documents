@@ -132,6 +132,18 @@ test('a refunded article stays un-claimable even though its slot is returned', (
   assert.equal(DUPLICATE_BLOCKING_STATUSES.includes(RequestStatus.CANCELLED), false);
 });
 
+test('a claim revoked after approval gives back the slot but never the article', () => {
+  // Same policy as a full clawback, owner's decision 20 ต.ค. 2569: the money and
+  // the year's slot return, the same paper cannot simply be filed again.
+  assert.equal(ENTITLEMENT_STATUSES.includes(RequestStatus.REVOKED), false);
+  assert.equal(DUPLICATE_BLOCKING_STATUSES.includes(RequestStatus.REVOKED), true);
+  assert.equal(ACTIVE_CLAIM_STATUSES.includes(RequestStatus.REVOKED), true);
+  // Nobody acts on it again, and the claimant cannot cancel it either.
+  assert.equal(IN_FLIGHT_STATUSES.includes(RequestStatus.REVOKED), false);
+  assert.equal(CANCELLABLE_STATUSES.includes(RequestStatus.REVOKED), false);
+  assert.equal(stepByStatus(RequestStatus.REVOKED), undefined);
+});
+
 test('the submit gate also blocks an article already moving through review', () => {
   // Without the in-flight statuses, two copies of one article could be filed at
   // once, pass a settled-only check, and both reach approval.

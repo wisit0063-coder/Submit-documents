@@ -36,11 +36,16 @@ export interface PushContent {
  * the process ends and the claimant prints the memo, while recording the payment
  * is an optional step nobody has been given (ข้อ 18.3). Tying the popup to PAID
  * would mean the claimant never hears that their money was approved.
+ *
+ * REVOKED joined on 20 ต.ค. 2569 with the revoke button (CLAUDE.md ข้อ 26): it
+ * settles the matter like a rejection, and takes back an approval the claimant
+ * may already have printed papers for.
  */
 export const OWNER_PUSH_STATUSES: readonly RequestStatus[] = [
   RequestStatus.APPROVED,
   RequestStatus.RETURNED,
   RequestStatus.REJECTED,
+  RequestStatus.REVOKED,
 ];
 
 /** Popups show two or three lines; anything longer is cut by the OS anyway. */
@@ -87,6 +92,14 @@ export function ownerPush(
     case RequestStatus.REJECTED:
       return {
         title: clip(`คำขอ ${claim.requestNo} ไม่ได้รับการอนุมัติ`, TITLE_MAX),
+        body: [article, reason ?? 'กรุณาเข้าระบบเพื่อดูรายละเอียด'].join('\n'),
+        tag,
+      };
+    // Settles the matter the way a rejection does, and takes back news the
+    // claimant may already have acted on - they could be holding the papers.
+    case RequestStatus.REVOKED:
+      return {
+        title: clip(`คำขอ ${claim.requestNo} ถูกยกเลิกหลังอนุมัติ`, TITLE_MAX),
         body: [article, reason ?? 'กรุณาเข้าระบบเพื่อดูรายละเอียด'].join('\n'),
         tag,
       };
