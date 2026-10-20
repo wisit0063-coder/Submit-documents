@@ -1,4 +1,18 @@
 import { z } from 'zod';
+import { RequestStatus } from '@prisma/client';
+import { FIRST_CLAIMABLE_YEAR, isPlausiblePublicationYear } from '../config/workflow';
+import { stripInvisible } from '../utils/text';
+
+/**
+ * Free text on its way into the database. Trims, composes accents one way and
+ * drops characters a reader cannot see - the zero-width spaces and the bidi
+ * overrides that make a title print backwards in the memo sent to the bursar
+ * (utils/text.ts explains what and why).
+ *
+ * Applied to every field that is printed on a document or compared by a rule.
+ */
+const cleaned = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((value) => (typeof value === 'string' ? stripInvisible(value) : value), schema);
 
 /**
  * Schemas are the contract for request bodies and are mirrored by the frontend
@@ -23,20 +37,27 @@ const issnField = z
   .or(z.literal(''));
 
 export const createRequestSchema = z.object({
-  articleTitle: z.string().trim().min(10, 'กรุณากรอกชื่อบทความอย่างน้อย 10 ตัวอักษร').max(1000),
-  journalName: z.string().trim().min(3, 'กรุณากรอกชื่อวารสาร').max(500),
-  volume: z.string().trim().max(50).optional().nullable(),
-  issue: z.string().trim().max(50).optional().nullable(),
-  pages: z.string().trim().max(50).optional().nullable(),
+  articleTitle: cleaned(
+    z.string().trim().min(10, 'กรุณากรอกชื่อบทความอย่างน้อย 10 ตัวอักษร').max(1000),
+  ),
+  journalName: cleaned(z.string().trim().min(3, 'กรุณากรอกชื่อวารสาร').max(500)),
+  volume: cleaned(z.string().trim().max(50).optional().nullable()),
+  issue: cleaned(z.string().trim().max(50).optional().nullable()),
+  pages: cleaned(z.string().trim().max(50).optional().nullable()),
   issn: issnField,
   issnElectronic: issnField,
   // Free text on purpose: journals write their coverage however they like
   // ("พฤษภาคม-สิงหาคม 2569", "Vol 4 No 2 (2026)") and the voucher quotes it
   // verbatim. It is never parsed, so there is nothing to get wrong by typing.
-  issuePeriod: z.string().trim().max(120).optional().nullable().or(z.literal('')),
-  doi: z.string().trim().max(255).optional().nullable(),
+  issuePeriod: cleaned(z.string().trim().max(120).optional().nullable().or(z.literal(''))),
+  doi: cleaned(z.string().trim().max(255).optional().nullable()),
   articleUrl: z.string().trim().url('รูปแบบ URL ไม่ถูกต้อง').optional().nullable().or(z.literal('')),
-  publishedAt: isoDate,
+  publishedAt: isoDate.refine(
+    (value) => isPlausiblePublicationYear(new Date(value)),
+    {
+      message: `ปีที่ตีพิมพ์ต้องอยู่ระหว่าง พ.ศ. ${FIRST_CLAIMABLE_YEAR + 543} ถึงปีหน้า`,
+    },
+  ),
   journalTierId: idString,
   fromConference: z.boolean().default(false),
   departmentId: idString.optional(),
@@ -63,7 +84,12 @@ export const previewAmountSchema = z.object({
 });
 
 export const listRequestsSchema = z.object({
-  status: z.string().optional(),
+  // Checked against the enum rather than passed through: an unknown value used
+  // to answer 200 with every row, so the screen looked unfiltered when the
+  // caller believed it was filtered. Every other filter here already refuses
+  // what it cannot use. The web drops empty parameters before sending, so no
+  // screen relies on "" meaning "all".
+  status: z.nativeEnum(RequestStatus, { message: 'สถานะที่ใช้กรองไม่ถูกต้อง' }).optional(),
   year: z.coerce.number().int().min(2000).max(3000).optional(),
   facultyId: idString.optional(),
   // "1" narrows the list to the caller's own claims. It can only ever remove

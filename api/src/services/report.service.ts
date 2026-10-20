@@ -13,8 +13,13 @@ interface ReportFilter {
 }
 
 /** A numeric id from the query string, or undefined - never a BigInt SyntaxError. */
+/** Same ceiling as idParam: a longer run of digits overflows the column. */
+const MAX_BIGINT = 9223372036854775807n;
+
 function optionalId(value: string | undefined): bigint | undefined {
-  return value && /^\d+$/.test(value) ? BigInt(value) : undefined;
+  if (!value || !/^\d+$/.test(value)) return undefined;
+  const parsed = BigInt(value);
+  return parsed > MAX_BIGINT ? undefined : parsed;
 }
 
 function baseWhere(filter: ReportFilter) {

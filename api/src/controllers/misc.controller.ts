@@ -17,6 +17,14 @@ function requireUser(req: Request) {
   return req.user;
 }
 
+/** Smaller than any real PDF, JPEG or PNG; see the check in uploadAttachment. */
+const MIN_UPLOAD_BYTES = 100;
+
+/** Multer has already written the file, so a rejected upload has to be swept up. */
+async function removeUploadedFile(filePath: string): Promise<void> {
+  await fs.promises.rm(filePath, { force: true });
+}
+
 // ---------------------------------------------------------------
 // Attachments
 // ---------------------------------------------------------------
@@ -24,6 +32,20 @@ function requireUser(req: Request) {
 export const uploadAttachment = asyncHandler(async (req: Request, res: Response) => {
   const user = requireUser(req);
   if (!req.file) throw badRequest('FILE_REQUIRED', 'กรุณาแนบไฟล์');
+
+  // An empty file passes the type filter - multer reads the declared MIME type,
+  // not the bytes - and then counts towards the three attachments ประกาศ ข้อ ๗
+  // requires, which is the whole point of requiring them. Nobody finds out
+  // until a reviewer opens it, by which time the claim has travelled. The floor
+  // is well under any real document: the smallest valid PDF is a few hundred
+  // bytes, and a JPEG or PNG header alone is larger than this.
+  if (req.file.size < MIN_UPLOAD_BYTES) {
+    await removeUploadedFile(req.file.path);
+    throw badRequest(
+      'FILE_EMPTY',
+      'ไฟล์ที่แนบว่างเปล่าหรือเสียหาย กรุณาตรวจสอบไฟล์แล้วแนบใหม่',
+    );
+  }
 
   const docType = (req.body as { docType?: string }).docType;
   if (!docType || !(docType in DocType)) {

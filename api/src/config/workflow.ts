@@ -256,8 +256,85 @@ export function isWithinClaimWindow(publishedAt: Date, filedAt: Date): boolean {
   );
 }
 
+/**
+ * ค.ศ. 2023 = พ.ศ. 2566, the year ประกาศ 2131/2566 took effect. Nothing
+ * published before it can be claimed under these rules, so nothing older has
+ * any business being typed into the form either. The same floor is used by the
+ * year filter on the web (web/src/lib/years.ts).
+ */
+export const FIRST_CLAIMABLE_YEAR = 2023;
+
+/**
+ * Is this a publication date a person could plausibly be filing for?
+ *
+ * Only a sanity bound on what gets stored - the rule that decides whether a
+ * claim may be FILED is isWithinClaimWindow above, and this must never
+ * contradict it. The ceiling is next year, not this year, for two reasons: a
+ * journal may date its December issue to the coming year, and an article
+ * published in December is filed in January of the following year under the
+ * grace window the office granted (CLAUDE.md ข้อ 6). Filing that January claim
+ * asks about a publication year one BELOW the current year, so the window
+ * stays open either way.
+ *
+ * Added 18 ต.ค. 2569 after a draft was saved with a publication date in 2099,
+ * which the submit gate refused but which sat in the table with calendar_year
+ * 2099 and showed up nowhere anyone could find it.
+ */
+export function isPlausiblePublicationYear(publishedAt: Date, now: Date = new Date()): boolean {
+  const year = calendarYearOf(publishedAt);
+  return year >= FIRST_CLAIMABLE_YEAR && year <= calendarYearOf(now) + 1;
+}
+
 export const REQUIRED_DOC_TYPES = [
   'ACCEPTANCE_LETTER',
   'ARTICLE_COPY',
   'DATABASE_PROOF',
 ] as const;
+
+/**
+ * The posts a claim passes through, in the order it meets them.
+ *
+ * Accounts for these belong to the post rather than to the person holding it:
+ * terms end about every four years and the account is handed on, because the
+ * claims waiting at a step are found by role and unit, so replacing the account
+ * would strand them (CLAUDE.md ข้อ 19). This list is what the handover screen
+ * is built from, so a change to the chain above reaches it without edits here.
+ */
+export interface PositionRole {
+  order: number;
+  roleCode: string;
+  /** The step label as it reads on the form and in the progress bar. */
+  labelTh: string;
+  /** Authority limited to one unit, so every unit has its own holder. */
+  facultyScoped: boolean;
+  /** Claims in this status are waiting on this post. Null means no queue. */
+  waitingStatus: RequestStatus | null;
+}
+
+export const POSITION_ROLES: readonly PositionRole[] = [
+  ...WORKFLOW_STEPS.map((step) => ({
+    order: step.order,
+    roleCode: step.roleCode,
+    labelTh: step.labelTh,
+    facultyScoped: step.facultyScoped,
+    waitingStatus: step.status,
+  })),
+  {
+    // Last because it comes after the chain ends, and marked as optional
+    // because nobody is required to record a payment (ข้อ 18.3) - but the
+    // account still signs for refunds under ประกาศ ข้อ ๕(๖), so it is handed on
+    // the same way.
+    order: WORKFLOW_STEPS.length + 1,
+    roleCode: 'FINANCE',
+    labelTh: 'บันทึกผลการเบิกจ่าย (ไม่ใช่ขั้นบังคับ)',
+    facultyScoped: false,
+    waitingStatus: null,
+  },
+];
+
+/** Role codes that make an account a position account, for guarding handover. */
+export const POSITION_ROLE_CODES: readonly string[] = POSITION_ROLES.map((role) => role.roleCode);
+
+export function isPositionRole(roleCode: string): boolean {
+  return POSITION_ROLE_CODES.includes(roleCode);
+}

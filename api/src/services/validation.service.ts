@@ -12,6 +12,7 @@ import {
   isWithinClaimWindow,
 } from '../config/workflow';
 import { calendarYearOf } from '../utils/datetime';
+import { normaliseArticleText, sameArticleNaming } from '../utils/article-key';
 
 export interface ValidationIssue {
   code: string;
@@ -22,9 +23,13 @@ type RequestWithRelations = Prisma.RequestGetPayload<{
   include: { attachments: true; journalTier: true };
 }>;
 
-function normalise(value: string): string {
-  return value.toLowerCase().replace(/\s+/g, ' ').trim();
-}
+/**
+ * One normaliser for every rule that compares text, so none of them can be
+ * walked past with characters a reader cannot see. It used to fold case and
+ * whitespace only, which left both the duplicate check and the list below open
+ * to a zero-width space typed into the middle of a name.
+ */
+const normalise = normaliseArticleText;
 
 /** Rule 7: journal must not appear on a hijacked / predatory list. */
 export function isBlacklistedJournal(journalName: string, issn?: string | null): boolean {
@@ -82,7 +87,17 @@ export async function getQuota(userId: bigint, entitlementYear: number, client: 
  * A rejected or cancelled request never blocks anything, so it can be filed again.
  */
 export async function findDuplicateArticle(
-  request: { id: bigint; doi: string | null; issn: string | null; articleTitle: string },
+  request: {
+    id: bigint;
+    doi: string | null;
+    issn: string | null;
+    articleTitle: string;
+    // Required, not optional: these two carry the last key below, and a query
+    // that forgets to select them has to fail to compile rather than quietly
+    // skip the check - the trap the optional status field fell into once.
+    journalName: string;
+    calendarYear: number;
+  },
   statuses: RequestStatus[],
   client: Tx = prisma,
 ) {
@@ -115,6 +130,30 @@ export async function findDuplicateArticle(
     const hit = candidates.find((candidate) => normalise(candidate.articleTitle) === title);
     if (hit) return { id: hit.id, requestNo: hit.requestNo, status: hit.status };
   }
+
+  // Last net, and the reason it exists: neither identifier is mandatory
+  // anywhere - the schema allows both to be null and no rule at submit demands
+  // either - so a filing carrying no DOI and no ISSN met no key at all and the
+  // same article could be claimed twice. Proved by walking the running system
+  // on 14 ต.ค. 2569: two filings identical in title, journal, volume, issue and
+  // pages, differing only in who filed them, were both accepted; the same pair
+  // with a shared DOI was refused. It also catches the mismatch where one
+  // filing carries only a DOI and the other only an ISSN, which share no key.
+  //
+  // Title plus journal plus the year of publication needs no identifier, and
+  // two genuinely different articles do not share all three. Scoped to the
+  // publication year so the scan stays small, and the year is part of the key
+  // anyway (rule 8 ties an article to the year it came out).
+  const sameYear = await client.request.findMany({
+    where: {
+      id: { not: request.id },
+      calendarYear: request.calendarYear,
+      status: { in: statuses },
+    },
+    select: { id: true, requestNo: true, articleTitle: true, journalName: true, status: true },
+  });
+  const byNaming = sameYear.find((candidate) => sameArticleNaming(request, candidate));
+  if (byNaming) return { id: byNaming.id, requestNo: byNaming.requestNo, status: byNaming.status };
 
   return null;
 }

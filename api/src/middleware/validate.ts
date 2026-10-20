@@ -10,10 +10,21 @@ import { notFound } from '../utils/errors';
  * these routes constantly, and none of that is an internal error: an id that is
  * not a number simply names nothing.
  */
+/**
+ * The largest value a Postgres bigint column holds. A longer run of digits is
+ * still a valid BigInt in JavaScript, so it sailed past the check below and
+ * only failed deep inside Prisma, which answered 500 - the exact outcome this
+ * helper exists to prevent (CLAUDE.md ข้อ 9). Found on 18 ต.ค. 2569 by asking
+ * for /requests/99999999999999999999999999.
+ */
+const MAX_BIGINT = 9223372036854775807n;
+
 export function idParam(req: Request, name = 'id'): bigint {
   const raw = req.params[name];
   if (!raw || !/^\d+$/.test(raw)) throw notFound('ไม่พบข้อมูลที่ต้องการ');
-  return BigInt(raw);
+  const value = BigInt(raw);
+  if (value > MAX_BIGINT) throw notFound('ไม่พบข้อมูลที่ต้องการ');
+  return value;
 }
 
 /**
