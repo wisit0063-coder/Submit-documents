@@ -304,6 +304,12 @@ async function partRegistration() {
     facultyId: FACULTY.LAS,
     staffTrack: 'ACADEMIC',
     departmentName: 'วิทยาการคอมพิวเตอร์',
+    // Required since 14 ต.ค. 2569: form CPRU-RDI-F011 asks the claimant for
+    // both, and the memo and the receipt voucher print them. The academic
+    // position stays optional because support staff may claim and rarely hold
+    // one (CLAUDE.md 13.2).
+    prefix: 'นาย',
+    academicPosition: null,
     firstName: 'ทดสอบ',
     lastName: 'ผู้ขอเบิก',
     phone: '081-234-5678',
