@@ -28,6 +28,7 @@ export const PAGE_ROLES: Record<string, RoleCode[]> = {
   ],
   '/admin/registrations': ['ADMIN'],
   '/admin/users': ['ADMIN'],
+  '/admin/positions': ['ADMIN'],
   '/admin/journal-tiers': ['ADMIN'],
 };
 

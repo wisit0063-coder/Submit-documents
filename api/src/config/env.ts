@@ -121,6 +121,16 @@ export const env = {
     from: process.env.MAIL_FROM ?? 'no-reply@cpru.ac.th',
   },
 
+  // Web Push popups (CLAUDE.md ข้อ 10). Optional on purpose: without keys the
+  // channel reports itself disabled and nothing else changes, so a server that
+  // has not been given keys yet still boots and works. Not checked by
+  // assertProductionSecrets for the same reason.
+  vapid: {
+    publicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+    privateKey: process.env.VAPID_PRIVATE_KEY ?? '',
+    subject: process.env.VAPID_SUBJECT || 'mailto:no-reply@cpru.ac.th',
+  },
+
   // Guards POST /cron/reminders, which is reachable without a session.
   cronToken: secret('CRON_TOKEN', ''),
   reminderAfterBusinessDays: toInt(process.env.REMINDER_AFTER_BUSINESS_DAYS, 5),

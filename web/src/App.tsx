@@ -14,6 +14,7 @@ import { PaymentsPage } from '@/pages/PaymentsPage';
 import { BudgetPage } from '@/pages/BudgetPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { AdminUsersPage } from '@/pages/AdminUsersPage';
+import { AdminPositionsPage } from '@/pages/AdminPositionsPage';
 import { AdminTiersPage } from '@/pages/AdminTiersPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { AdminRegistrationsPage } from '@/pages/AdminRegistrationsPage';
@@ -132,6 +133,14 @@ export default function App() {
           element={
             <RequireRoles path="/admin/users">
               <AdminUsersPage />
+            </RequireRoles>
+          }
+        />
+        <Route
+          path="/admin/positions"
+          element={
+            <RequireRoles path="/admin/positions">
+              <AdminPositionsPage />
             </RequireRoles>
           }
         />

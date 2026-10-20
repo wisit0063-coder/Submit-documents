@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { env } from '../config/env';
 import { asyncHandler } from '../middleware/validate';
+import { signToken } from '../middleware/auth';
 import { serialize } from '../utils/serialize';
 import { unauthorized } from '../utils/errors';
 import { entitlementYearOf } from '../config/workflow';
@@ -34,6 +35,16 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
     newPassword: string;
   };
   await authService.changePassword(req.user.id, currentPassword, newPassword);
+
+  // Setting a password ends every session older than it (utils/session.ts),
+  // which would include the one making this call. Hand back a token minted
+  // after the change so this browser stays signed in while any other tab or
+  // device holding the old credential is turned away.
+  res.cookie(
+    env.cookieName,
+    signToken(req.user.id, req.user.username),
+    authService.cookieOptions(),
+  );
   res.json({ ok: true });
 });
 

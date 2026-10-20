@@ -3,13 +3,15 @@ import { STATUS_LABELS_TH, stepByStatus } from '../config/workflow';
 import type { NotificationChannel, NotificationMessage } from './channel';
 import { emailChannel } from './email.channel';
 import { logChannel } from './log.channel';
+import { webPushChannel } from './webpush.channel';
+import { ownerPush, reviewerPush } from './push-policy';
 import type { RequestStatus } from '@prisma/client';
 
 /**
  * Register additional channels here (LINE Messaging API, SMS, in-app).
  * Order does not matter: every enabled channel receives every message.
  */
-const channels: NotificationChannel[] = [emailChannel, logChannel];
+const channels: NotificationChannel[] = [emailChannel, logChannel, webPushChannel];
 
 /**
  * Notifications never block or fail the caller: a dead SMTP server must not
@@ -92,10 +94,14 @@ export async function notifyStatusChange(context: StatusChangeContext): Promise<
         .filter(Boolean)
         .join('\n'),
       link,
+      // Only approved, returned and not approved: the events that ask something
+      // of the claimant or settle the matter (push-policy.ts).
+      push: ownerPush(context.toStatus, context, context.note) ?? undefined,
     });
   }
 
   const handlers = await nextStepHandlers(context.toStatus, context.facultyId);
+  const stepLabel = stepByStatus(context.toStatus)?.labelTh ?? statusLabel;
   for (const handler of handlers) {
     if (handler.id === context.ownerId) continue; // already notified as requester
     messages.push({
@@ -109,6 +115,7 @@ export async function notifyStatusChange(context: StatusChangeContext): Promise<
         'กรุณาเข้าระบบเพื่อพิจารณา',
       ].join('\n'),
       link,
+      push: reviewerPush(context, stepLabel),
     });
   }
 

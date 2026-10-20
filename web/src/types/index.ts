@@ -309,3 +309,67 @@ export interface UserRow {
   department: { id: string; nameTh: string; faculty: { id: string; nameTh: string } } | null;
   userRoles: { id: string; facultyId: string | null; role: { id: string; code: RoleCode; nameTh: string } }[];
 }
+
+// --- บัญชีประจำตำแหน่ง (CLAUDE.md ข้อ 19) -------------------------------
+
+/** One holder of one signing post, as GET /positions returns them. */
+export interface PositionHolder {
+  id: string;
+  username: string;
+  email: string;
+  prefix: string | null;
+  firstName: string;
+  lastName: string;
+  holderName: string;
+  academicPosition: string | null;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  lastLoginAt: string | null;
+  passwordChangedAt: string | null;
+  lastHandoverAt: string | null;
+  facultyIds: (string | null)[];
+  facultyNames: string[];
+  /** Also files claims of its own, so its history would follow the post. */
+  holdsResearcher: boolean;
+  /** Claims it has actually filed; drafts do not count. */
+  ownClaims: number;
+  /** Holds ADMIN too, so handover refuses it and the buttons are hidden. */
+  isAdminAccount: boolean;
+  /** Claims waiting on this holder right now; null where the step has no queue. */
+  waitingCount: number | null;
+}
+
+export interface PositionStep {
+  order: number;
+  roleCode: RoleCode;
+  labelTh: string;
+  facultyScoped: boolean;
+  waitingCount: number | null;
+  holders: PositionHolder[];
+  /** Holders who can still sign. Zero means the step is stalled. */
+  activeHolders: number;
+  /** Units with nobody to sign for them: claims filed there stop for good. */
+  unitsWithoutHolder: { id: string; nameTh: string }[];
+}
+
+export type PositionAccountAction = 'HANDOVER' | 'PASSWORD_RESET';
+
+export interface PositionHandoverLog {
+  id: string;
+  action: PositionAccountAction;
+  actorName: string;
+  previousHolder: string;
+  newHolder: string;
+  previousPosition: string | null;
+  newPosition: string | null;
+  rolesSnapshot: string;
+  reason: string;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+/** Both handover calls answer with the one-time password, once. */
+export interface PositionHandoverResult {
+  account: { id: string; username: string; holderName?: string };
+  tempPassword: string;
+}

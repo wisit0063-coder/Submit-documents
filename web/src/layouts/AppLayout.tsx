@@ -6,6 +6,7 @@ import { useAuth, REVIEWER_ROLES } from '@/lib/auth';
 import { rolesForPath } from '@/lib/access';
 import { ROLE_LABELS } from '@/lib/format';
 import { Badge, Button, cn } from '@/components/ui';
+import { PushToggle } from '@/components/PushToggle';
 
 interface NavItem {
   to: string;
@@ -44,6 +45,14 @@ const NAV_ITEMS: NavItem[] = [
     to: '/admin/users',
     label: 'ผู้ใช้งาน',
     icon: icon('M16 20v-2a4 4 0 0 0-8 0v2M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'),
+  },
+  {
+    // Ordered next to the user list because both are about who may act, not
+    // about any one claim. Handing a signing post to its next holder is a
+    // different job from editing an account, so it gets its own screen (ข้อ 19).
+    to: '/admin/positions',
+    label: 'บัญชีประจำตำแหน่ง',
+    icon: icon('M12 3l8 4v5c0 4-3.4 7.4-8 9-4.6-1.6-8-5-8-9V7l8-4zM9 12l2 2 4-4'),
   },
   { to: '/admin/journal-tiers', label: 'อัตราค่าตอบแทน', icon: icon('M4 6h16M4 12h16M4 18h10') },
 ];
@@ -120,6 +129,7 @@ export function AppLayout() {
           </div>
 
           <div className="ml-auto flex items-center gap-3">
+            <PushToggle />
             <div className="hidden text-right sm:block">
               <p className="text-sm font-medium text-slate-800">{user?.fullName}</p>
               <p className="text-xs text-slate-500">

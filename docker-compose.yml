@@ -51,6 +51,12 @@ x-api-environment: &api-environment
   SMTP_PASS: ${SMTP_PASS:-}
   MAIL_FROM: ${MAIL_FROM:-no-reply@cpru.ac.th}
 
+  # Web Push popups (CLAUDE.md ข้อ 10). Left empty, pushes are simply not sent:
+  # nothing else depends on them, so a missing key never stops the app booting.
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:no-reply@cpru.ac.th}
+
   # The default must stay identical to CRON_TOKEN under "cron".
   CRON_TOKEN: ${CRON_TOKEN:-test-cron-token-local-docker-only}
   REMINDER_AFTER_BUSINESS_DAYS: ${REMINDER_AFTER_BUSINESS_DAYS:-5}

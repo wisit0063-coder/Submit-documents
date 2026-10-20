@@ -4,6 +4,7 @@ import { IN_FLIGHT_STATUSES, STATUS_LABELS_TH, stepByStatus } from '../config/wo
 import { businessDaysBetween } from '../utils/datetime';
 import { dispatch } from '../notifications/dispatcher';
 import type { NotificationMessage } from '../notifications/channel';
+import { reminderPush } from '../notifications/push-policy';
 
 /**
  * Called once a day by cPanel cron (POST /api/cron/reminders with X-Cron-Token).
@@ -77,6 +78,10 @@ export async function sendStaleReminders() {
           'กรุณาเข้าระบบเพื่อพิจารณา',
         ].join('\n'),
         link: `/requests/${request.id}`,
+        // Reviewers only. The claimant's reminder above stays email-only: the
+        // owner limited the claimant's popups to approved, returned and not
+        // approved (push-policy.ts), and a stalled claim asks nothing of them.
+        push: reminderPush(request, waiting),
       });
     }
   }

@@ -71,7 +71,14 @@ export async function changePassword(
 
   await prisma.user.update({
     where: { id: userId },
-    data: { passwordHash: await hashPassword(newPassword), mustChangePassword: false },
+    data: {
+      passwordHash: await hashPassword(newPassword),
+      mustChangePassword: false,
+      // Ends every session signed before now - including this one, which is why
+      // the controller hands back a fresh cookie. Other tabs and other devices
+      // holding the old credential stop working immediately.
+      passwordChangedAt: new Date(),
+    },
   });
 }
 
@@ -122,7 +129,13 @@ export async function resetPassword(token: string, newPassword: string): Promise
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash: await hashPassword(newPassword), mustChangePassword: false },
+    data: {
+      passwordHash: await hashPassword(newPassword),
+      mustChangePassword: false,
+      // Whoever used the emailed link now holds the account; anyone still signed
+      // in under the old password does not.
+      passwordChangedAt: new Date(),
+    },
   });
 }
 

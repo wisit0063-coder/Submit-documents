@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, SESSION_EXPIRED_EVENT } from './api';
 import { useToast } from '@/components/ui';
 import type { AuthUser, Quota, RoleCode } from '@/types';
+import { disablePush } from '@/lib/push';
 
 /**
  * Every tab of one browser shares one session cookie, so a sign-in or sign-out
@@ -113,6 +114,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    // Before the session ends, while the server still knows who is asking: the
+    // next person to sign in on this browser must not receive this person's
+    // popups. Signing out is not switching popups off, so nothing is remembered.
+    try {
+      await disablePush(null, false);
+    } catch {
+      // Never let this stand between someone and signing out.
+    }
     try {
       await api.post('/auth/logout');
     } catch {

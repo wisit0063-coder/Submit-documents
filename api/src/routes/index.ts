@@ -8,6 +8,9 @@ import * as requestController from '../controllers/request.controller';
 import * as approvalController from '../controllers/approval.controller';
 import * as misc from '../controllers/misc.controller';
 import * as registrationController from '../controllers/registration.controller';
+import * as positionController from '../controllers/position.controller';
+import * as pushController from '../controllers/push.controller';
+import { subscribePushSchema, unsubscribePushSchema } from '../validators/push.schema';
 import { loginRateLimiter, registerRateLimiter } from '../middleware/rate-limit';
 import {
   approveRegistrationSchema,
@@ -15,6 +18,10 @@ import {
   registerSchema,
   rejectRegistrationSchema,
 } from '../validators/registration.schema';
+import {
+  handoverPositionSchema,
+  resetPositionPasswordSchema,
+} from '../validators/position.schema';
 import {
   changePasswordSchema,
   budgetYearSchema,
@@ -81,6 +88,16 @@ router.use(authenticate);
 router.post('/auth/logout', authController.logout);
 router.get('/auth/me', authController.me);
 router.post('/auth/change-password', validateBody(changePasswordSchema), authController.changePassword);
+
+// --- Popup notifications (Web Push) ---------------------------
+// Every signed-in user, whatever their role: claimants are told when a claim
+// is approved, returned or not approved, reviewers when one reaches them
+// (notifications/push-policy.ts). Each call only ever touches the caller's own
+// browsers.
+router.get('/push/public-key', pushController.publicKey);
+router.post('/push/subscribe', validateBody(subscribePushSchema), pushController.subscribe);
+router.post('/push/unsubscribe', validateBody(unsubscribePushSchema), pushController.unsubscribe);
+router.post('/push/test', pushController.test);
 
 // --- Requests -------------------------------------------------
 router.get('/requests', validateQuery(listRequestsSchema), requestController.list);
@@ -218,6 +235,26 @@ router.patch(
   requireRoles('ADMIN'),
   validateBody(userStatusSchema),
   misc.setUserStatus,
+);
+
+// --- Position accounts ----------------------------------------
+// Accounts that sign for a step belong to the post, so they are handed to the
+// next holder rather than replaced - the claims waiting at a step are found by
+// role and unit (CLAUDE.md ข้อ 19). ADMIN alone, and every call writes a row in
+// position_handover_logs, because a password here is a signature (ข้อ 18).
+router.get('/positions', requireRoles('ADMIN'), positionController.list);
+router.get('/positions/:id/logs', requireRoles('ADMIN'), positionController.logs);
+router.post(
+  '/positions/:id/handover',
+  requireRoles('ADMIN'),
+  validateBody(handoverPositionSchema),
+  positionController.handover,
+);
+router.post(
+  '/positions/:id/reset-password',
+  requireRoles('ADMIN'),
+  validateBody(resetPositionPasswordSchema),
+  positionController.resetPassword,
 );
 
 // --- Reports --------------------------------------------------

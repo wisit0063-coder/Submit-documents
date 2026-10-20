@@ -70,6 +70,11 @@ model User {
   email              String    @unique @db.VarChar(255)
   passwordHash       String    @map("password_hash") @db.VarChar(255)
   mustChangePassword Boolean   @default(true) @map("must_change_password")
+  /// Sessions signed before this moment are refused, so handing a position
+  /// account on ends the previous holder sessions at once rather than leaving
+  /// them valid until the token expires (utils/session.ts). Null while an
+  /// account password has not changed since the column existed.
+  passwordChangedAt  DateTime? @map("password_changed_at")
   prefix             String?   @db.VarChar(50) // นาย / นาง / นางสาว / ดร.
   firstName          String    @map("first_name") @db.VarChar(150)
   lastName           String    @map("last_name") @db.VarChar(150)
@@ -109,6 +114,9 @@ model User {
   verifiedFiles         RequestAttachment[] @relation("AttachmentVerifier")
   recordedPayment       Payment[]
   budgetYearLogs        BudgetYearLog[]
+  positionHandovers     PositionHandoverLog[] @relation("PositionAccount")
+  handoversPerformed    PositionHandoverLog[] @relation("PositionHandoverActor")
+  pushSubscriptions     PushSubscription[]
 
   @@index([departmentId])
   @@index([facultyId])
@@ -475,4 +483,64 @@ model Payment {
 
   @@index([budgetYearId])
   @@map("payments")
+}
+
+/// ประวัติการส่งมอบบัญชีประจำตำแหน่ง (CLAUDE.md ข้อ 19)
+///
+/// Evidence on the same footing as RequestStatusLog and BudgetYearLog: written
+/// in the same transaction as the change, and with no route that deletes a row.
+/// A password stands in for a signature here, so being able to answer who was
+/// given the ability to sign for a post, by whom and why, matters as much as
+/// the signatures themselves.
+model PositionHandoverLog {
+  id       BigInt                @id @default(autoincrement())
+  userId   BigInt                @map("user_id")
+  action   PositionAccountAction
+  actorId  BigInt?               @map("actor_id")
+  /// Names as they stood at the time, never joined live - this table exists
+  /// because the account's own name is about to be overwritten.
+  actorName        String  @map("actor_name") @db.VarChar(255)
+  previousHolder   String  @map("previous_holder") @db.VarChar(255)
+  newHolder        String  @map("new_holder") @db.VarChar(255)
+  previousPosition String? @map("previous_position") @db.VarChar(150)
+  newPosition      String? @map("new_position") @db.VarChar(150)
+  /// Which steps the account could sign for at the time, as plain text, so the
+  /// row still reads correctly after its roles change.
+  rolesSnapshot String   @map("roles_snapshot") @db.Text
+  reason        String   @db.Text
+  ipAddress     String?  @map("ip_address") @db.VarChar(45)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user  User  @relation("PositionAccount", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("PositionHandoverActor", fields: [actorId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("position_handover_logs")
+}
+
+enum PositionAccountAction {
+  /// ส่งมอบให้ผู้ดำรงตำแหน่งคนใหม่ - เปลี่ยนทั้งชื่อและรหัสผ่าน
+  HANDOVER
+  /// ผู้ดำรงตำแหน่งคนเดิม แต่ตั้งรหัสผ่านใหม่ให้
+  PASSWORD_RESET
+}
+
+/// Where to deliver a popup notification (Web Push, CLAUDE.md ข้อ 10).
+/// One row per browser that allowed notifications; a person may have several.
+model PushSubscription {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt   @map("user_id")
+  /// The browser's address on its push service. One browser has exactly one,
+  /// so when someone else signs in there the row moves to them.
+  endpoint  String   @unique @db.Text
+  p256dh    String   @db.VarChar(255)
+  auth      String   @db.VarChar(255)
+  userAgent String?  @map("user_agent") @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

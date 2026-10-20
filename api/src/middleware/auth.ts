@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { prisma } from '../config/prisma';
 import { forbidden, unauthorized } from '../utils/errors';
+import { isSessionStale } from '../utils/session';
 
 export interface AuthUser {
   id: bigint;
@@ -14,6 +15,8 @@ export interface AuthUser {
   departmentId: bigint | null;
   facultyId: bigint | null;
   mustChangePassword: boolean;
+  /** When the password was last set; older sessions are refused. */
+  passwordChangedAt: Date | null;
   roles: string[];
   /** Faculty scope per role, e.g. DEAN of faculty 3. Null means university-wide. */
   roleScopes: { roleCode: string; facultyId: bigint | null }[];
@@ -22,6 +25,8 @@ export interface AuthUser {
 export interface JwtPayload {
   sub: string;
   username: string;
+  /** Seconds since the epoch, added by jsonwebtoken when it signs. */
+  iat?: number;
 }
 
 export function signToken(userId: bigint, username: string): string {
@@ -50,6 +55,7 @@ export async function loadAuthUser(userId: bigint): Promise<AuthUser | null> {
     // person may have no department. Older accounts fall back to theirs.
     facultyId: user.facultyId ?? user.department?.facultyId ?? null,
     mustChangePassword: user.mustChangePassword,
+    passwordChangedAt: user.passwordChangedAt,
     roles: user.userRoles.map((ur) => ur.role.code),
     roleScopes: user.userRoles.map((ur) => ({ roleCode: ur.role.code, facultyId: ur.facultyId })),
   };
@@ -70,6 +76,14 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
 
     const user = await loadAuthUser(BigInt(decoded.sub));
     if (!user) throw unauthorized('บัญชีนี้ถูกปิดการใช้งาน');
+
+    // A valid signature is not enough: the password may have been reset since,
+    // which is how a position account is handed to its next holder. Without
+    // this the previous holder keeps acting until the token expires, and the
+    // password is what stands in for their signature (CLAUDE.md ข้อ 18).
+    if (isSessionStale(decoded.iat, user.passwordChangedAt)) {
+      throw unauthorized('บัญชีนี้มีการตั้งรหัสผ่านใหม่ กรุณาเข้าสู่ระบบอีกครั้ง');
+    }
 
     req.user = user;
     next();
