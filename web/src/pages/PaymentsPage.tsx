@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatDate, formatMoney, personName } from '@/lib/format';
+import { outstanding, refundedSoFar } from '@/lib/refund';
 import {
   Alert,
   Badge,
@@ -268,24 +269,28 @@ export function PaymentsPage() {
                   <Td>{formatDate(payment.paidAt)}</Td>
                   <Td className="text-right tabular-nums">
                     {formatMoney(payment.amount, false)}
-                    {payment.isRefunded && (
+                    {refundedSoFar(payment) > 0 && (
                       <Badge className="ml-2 bg-orange-50 text-orange-800 ring-orange-200">
                         คืน {formatMoney(payment.refundAmount, false)}
+                        {!payment.isRefunded && ' (บางส่วน)'}
                       </Badge>
                     )}
                   </Td>
                   <Td className="text-right">
-                    {!payment.isRefunded && can('FINANCE', 'ADMIN') && (
+                    {/* Offered while money is still out, not merely until the
+                        first clawback: a partial refund used to hide this
+                        button, so the rest could never be recorded. */}
+                    {outstanding(payment) > 0 && can('FINANCE', 'ADMIN') && (
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => {
                           setError(null);
-                          setRefundAmount(String(payment.amount));
+                          setRefundAmount(String(outstanding(payment)));
                           setRefundTarget(payment);
                         }}
                       >
-                        เรียกเงินคืน
+                        {refundedSoFar(payment) > 0 ? 'เรียกคืนส่วนที่เหลือ' : 'เรียกเงินคืน'}
                       </Button>
                     )}
                   </Td>
@@ -362,12 +367,21 @@ export function PaymentsPage() {
             {error && <Alert tone="error">{error}</Alert>}
             <p className="text-sm text-slate-600">
               {refundTarget.request.requestNo} · จ่ายไปแล้ว {formatMoney(refundTarget.amount)}
+              {refundedSoFar(refundTarget) > 0 && (
+                <>
+                  {' '}
+                  · คืนแล้ว {formatMoney(refundedSoFar(refundTarget))} ·{' '}
+                  <span className="font-medium text-slate-800">
+                    คืนได้อีกไม่เกิน {formatMoney(outstanding(refundTarget))}
+                  </span>
+                </>
+              )}
             </p>
             <Field label="จำนวนเงินที่เรียกคืน (บาท)" required>
               <Input
                 type="number"
                 min={0}
-                max={Number(refundTarget.amount)}
+                max={outstanding(refundTarget)}
                 value={refundAmount}
                 onChange={(event) => setRefundAmount(event.target.value)}
               />

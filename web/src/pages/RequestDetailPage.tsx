@@ -15,6 +15,7 @@ import {
   thaiYear,
   WORKFLOW_ORDER,
 } from '@/lib/format';
+import { outstanding, refundedSoFar } from '@/lib/refund';
 import {
   Alert,
   Badge,
@@ -550,10 +551,18 @@ export function RequestDetailPage() {
                 <DetailRow label="เลขที่ฎีกา">{request.payment.voucherNo || '-'}</DetailRow>
                 <DetailRow label="จำนวนเงิน">{formatMoney(request.payment.amount)}</DetailRow>
                 <DetailRow label="วันที่จ่าย">{formatDate(request.payment.paidAt)}</DetailRow>
-                {request.payment.isRefunded && (
+                {refundedSoFar(request.payment) > 0 && (
                   <>
-                    <DetailRow label="เรียกเงินคืน">
+                    <DetailRow
+                      label={request.payment.isRefunded ? 'เรียกเงินคืน' : 'เรียกเงินคืนบางส่วน'}
+                    >
                       {formatMoney(request.payment.refundAmount)}
+                      {!request.payment.isRefunded && (
+                        <span className="text-slate-500">
+                          {' '}
+                          · ยังไม่ได้คืน {formatMoney(outstanding(request.payment))}
+                        </span>
+                      )}
                     </DetailRow>
                     <DetailRow label="เหตุผล">{request.payment.refundReason}</DetailRow>
                   </>

@@ -2,6 +2,7 @@ import { Prisma, RequestStatus } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import type { AuthUser } from '../middleware/auth';
 import { notFound, unprocessable } from '../utils/errors';
+import { outstanding, refundedInFull, refundedSoFar } from '../utils/refund';
 import { lockRequest, writeStatusLog } from './request.service';
 import { notifyStatusChange, notifyPlain } from '../notifications/dispatcher';
 
@@ -99,25 +100,57 @@ export async function refundPayment(
     include: { request: true },
   });
   if (!payment) throw notFound('ไม่พบรายการจ่ายที่ระบุ');
-  if (payment.isRefunded) throw unprocessable('ALREADY_REFUNDED', 'รายการนี้เรียกเงินคืนไปแล้ว');
   if (!payment.paidAt) throw unprocessable('NOT_PAID_YET', 'รายการนี้ยังไม่ได้จ่าย');
-  if (input.refundAmount > Number(payment.amount)) {
-    throw unprocessable('REFUND_ABOVE_PAID', 'จำนวนเงินที่เรียกคืนต้องไม่เกินจำนวนที่จ่ายไป');
-  }
 
-  // Only a full clawback undoes the reimbursement. A partial one - an overpaid
-  // rate corrected by a few hundred baht - leaves the claimant with money in
-  // hand, so the request stays PAID and keeps consuming its yearly entitlement.
-  const isFullRefund = input.refundAmount >= Number(payment.amount);
+  // Clawbacks accumulate. The flag used to be set by a partial refund too, so
+  // the next call hit ALREADY_REFUNDED and the rest of the money could never be
+  // recorded as returned: the claim stayed PAID for good, kept consuming its
+  // owner's yearly entitlement, and the fund still counted money that had come
+  // back. That collides with ประกาศ ข้อ ๕(๖), which requires repayment
+  // "ตามจำนวนที่ได้รับ" - the whole of it. Found on 14 ต.ค. 2569 by clawing back
+  // 100 of 1,500 and then trying to claw back the remaining 1,400.
+  //
+  // isRefunded therefore means FULLY refunded, which is what flips the status.
+  if (refundedInFull(payment)) {
+    throw unprocessable('ALREADY_REFUNDED', 'รายการนี้เรียกเงินคืนครบจำนวนแล้ว');
+  }
+  if (input.refundAmount > outstanding(payment)) {
+    throw unprocessable(
+      'REFUND_ABOVE_PAID',
+      `จำนวนเงินที่เรียกคืนต้องไม่เกินยอดที่ยังไม่ได้คืน (${outstanding(payment).toLocaleString('th-TH')} บาท)`,
+    );
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     await lockRequest(tx, payment.requestId, payment.request.status);
 
+    // Read again inside the lock. The guards above ran outside the transaction,
+    // so two clerks clicking at once would both have passed them and the second
+    // write would have overwritten the first - the same race lockRequest was
+    // introduced for everywhere else (CLAUDE.md ข้อ 9).
+    const current = await tx.payment.findUnique({
+      where: { id: paymentId },
+      select: { amount: true, refundAmount: true },
+    });
+    if (!current) throw notFound('ไม่พบรายการจ่ายที่ระบุ');
+    if (refundedInFull(current)) {
+      throw unprocessable('ALREADY_REFUNDED', 'รายการนี้เรียกเงินคืนครบจำนวนแล้ว');
+    }
+    if (input.refundAmount > outstanding(current)) {
+      throw unprocessable(
+        'REFUND_ABOVE_PAID',
+        `จำนวนเงินที่เรียกคืนต้องไม่เกินยอดที่ยังไม่ได้คืน (${outstanding(current).toLocaleString('th-TH')} บาท)`,
+      );
+    }
+
+    const refundedTotal = refundedSoFar(current) + input.refundAmount;
+    const isFullRefund = refundedTotal >= Number(current.amount);
+
     await tx.payment.update({
       where: { id: paymentId },
       data: {
-        isRefunded: true,
-        refundAmount: new Prisma.Decimal(input.refundAmount),
+        isRefunded: isFullRefund,
+        refundAmount: new Prisma.Decimal(refundedTotal),
         refundReason: input.refundReason,
         refundedAt: new Date(),
       },
@@ -129,15 +162,18 @@ export async function refundPayment(
     });
 
     // Logged either way: a partial refund does not change the status, but it is
-    // still a money movement the audit trail has to show.
+    // still a money movement the audit trail has to show. The running total
+    // goes in the note because payments.refund_reason holds only the latest
+    // reason, so these rows are the only record of each separate clawback.
     await writeStatusLog(tx, {
       requestId: payment.requestId,
       fromStatus: payment.request.status,
       toStatus: isFullRefund ? RequestStatus.REFUNDED : payment.request.status,
       actor: user,
       note:
-        `เรียกเงินคืน ${input.refundAmount.toLocaleString('th-TH')} บาท` +
-        (isFullRefund ? '' : ' (บางส่วน คำขอยังคงสถานะจ่ายแล้ว)') +
+        `เรียกเงินคืน ${input.refundAmount.toLocaleString('th-TH')} บาท ` +
+        `(คืนแล้วรวม ${refundedTotal.toLocaleString('th-TH')} จาก ${Number(current.amount).toLocaleString('th-TH')} บาท)` +
+        (isFullRefund ? '' : ' คำขอยังคงสถานะจ่ายแล้ว') +
         `: ${input.refundReason}`,
       ipAddress,
     });
